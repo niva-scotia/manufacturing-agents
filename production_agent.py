@@ -12,10 +12,12 @@
 # ## Cell 1 — Install dependencies
 
 import sys, subprocess
-subprocess.run([sys.executable, "-m", "pip", "install", "openai", "pandas", "numpy", "--quiet"], check=True)
-print("Dependencies ready.")
 
-# ## Cell 2 — Imports
+# install all required packages including python-dotenv
+subprocess.run([sys.executable, "-m", "pip", "install", 
+                "openai", "pandas", "numpy", "python-dotenv", "--quiet"], 
+               check=True)
+print("Dependencies ready.")
 
 import os
 import json
@@ -23,27 +25,52 @@ import numpy as np
 import pandas as pd
 from openai import AzureOpenAI
 from datetime import datetime
+from dotenv import load_dotenv
+from pathlib import Path
 
 print("Imports successful.")
 
-# ## Cell 3 — Azure OpenAI client
+# load .env from the same folder as this script
+env_path = Path(__file__).parent / ".env"
+load_dotenv(dotenv_path=env_path)
+
+# verify .env was found
+print(f"Looking for .env at : {env_path}")
+print(f".env file exists    : {env_path.exists()}")
 
 AZURE_API_KEY     = os.environ.get("AZURE_API_KEY")
 AZURE_ENDPOINT    = os.environ.get("AZURE_ENDPOINT")
 AZURE_DEPLOYMENT  = os.environ.get("AZURE_DEPLOYMENT")
 AZURE_API_VERSION = os.environ.get("AZURE_API_VERSION")
 
+print(f"AZURE_API_KEY found : {AZURE_API_KEY is not None}")
+print(f"AZURE_ENDPOINT found: {AZURE_ENDPOINT is not None}")
+
+# stop immediately if any variable is missing
+missing = [name for name, val in {
+    "AZURE_API_KEY"    : AZURE_API_KEY,
+    "AZURE_ENDPOINT"   : AZURE_ENDPOINT,
+    "AZURE_DEPLOYMENT" : AZURE_DEPLOYMENT,
+    "AZURE_API_VERSION": AZURE_API_VERSION,
+}.items() if not val]
+
+if missing:
+    raise ValueError(
+        f"Missing environment variables: {missing}\n"
+        f"Check your .env file at: {env_path}"
+    )
+
 client = AzureOpenAI(
-    api_key        = AZURE_KEY.strip(),
-    azure_endpoint = AZURE_ENDPOINT,
-    api_version    = AZURE_API_VERSION,
+    api_key        = AZURE_API_KEY.strip(),
+    azure_endpoint = AZURE_ENDPOINT.strip(),
+    api_version    = AZURE_API_VERSION.strip(),
 )
 
 print(f"Azure OpenAI client ready.")
 
 # ## Cell 4 — Load and prepare data
 
-DATA_PATH = "data/val_machine.csv"
+DATA_PATH = "data/train_machine.csv"
 
 data = pd.read_csv(DATA_PATH)
 
@@ -478,7 +505,7 @@ anomalies, trends = run_agent(
     data         = data,
     thresholds   = USER_THRESHOLDS,
     trend_config = TREND_CONFIG,
-    max_rows     = None       # set to None for full dataset
+    max_rows     = None     # set to None for full dataset
 )
 
 # ## Cell 10 — Inspect results
