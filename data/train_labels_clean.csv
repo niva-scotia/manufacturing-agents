@@ -1,0 +1,86 @@
+wafer_id,is_fault,wafer_type,fault_name
+2901,0,normal,NONE
+2902,0,normal,NONE
+2903,0,normal,NONE
+2904,0,normal,NONE
+2905,0,normal,NONE
+2906,0,normal,NONE
+2907,0,normal,NONE
+2908,0,normal,NONE
+2909,0,normal,NONE
+2910,0,normal,NONE
+2911,0,normal,NONE
+2912,0,normal,NONE
+2913,0,normal,NONE
+2914,0,normal,NONE
+2919,0,normal,NONE
+2920,0,normal,NONE
+2921,0,normal,NONE
+2922,0,normal,NONE
+2923,0,normal,NONE
+2924,0,normal,NONE
+2925,0,normal,NONE
+2926,0,normal,NONE
+2927,0,normal,NONE
+2928,0,normal,NONE
+2929,0,normal,NONE
+2930,0,normal,NONE
+2931,0,normal,NONE
+2932,0,normal,NONE
+2933,0,normal,NONE
+2934,0,normal,NONE
+2935,0,normal,NONE
+2941,0,normal,NONE
+2942,0,normal,NONE
+2943,0,normal,NONE
+2915,1,fault,TCP +50
+2916,1,fault,RF -12
+2917,1,fault,RF +10
+2918,1,fault,Pr +3
+2936,1,fault,TCP +10
+2937,1,fault,BCl3 +5
+2938,1,fault,Pr -2
+2939,1,fault,Cl2 -5
+2940,1,fault,He Chuck
+3101,0,normal,NONE
+3102,0,normal,NONE
+3103,0,normal,NONE
+3104,0,normal,NONE
+3105,0,normal,NONE
+3106,0,normal,NONE
+3107,0,normal,NONE
+3108,0,normal,NONE
+3109,0,normal,NONE
+3110,0,normal,NONE
+3111,0,normal,NONE
+3112,0,normal,NONE
+3113,0,normal,NONE
+3114,0,normal,NONE
+3115,0,normal,NONE
+3116,0,normal,NONE
+3117,0,normal,NONE
+3118,0,normal,NONE
+3119,0,normal,NONE
+3123,0,normal,NONE
+3124,0,normal,NONE
+3126,0,normal,NONE
+3127,0,normal,NONE
+3128,0,normal,NONE
+3129,0,normal,NONE
+3130,0,normal,NONE
+3131,0,normal,NONE
+3132,0,normal,NONE
+3133,0,normal,NONE
+3134,0,normal,NONE
+3135,0,normal,NONE
+3136,0,normal,NONE
+3137,0,normal,NONE
+3138,0,normal,NONE
+3139,0,normal,NONE
+3140,0,normal,NONE
+3120,1,fault,TCP +30
+3121,1,fault,Cl2 +5
+3122,1,fault,RF +8
+3141,1,fault,BCl3 -5
+3142,1,fault,Pr +2
+3143,1,fault,TCP -20
