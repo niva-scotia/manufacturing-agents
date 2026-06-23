@@ -28,11 +28,6 @@ print("Imports successful.")
 
 # ## Cell 3 — Azure OpenAI client
 
-AZURE_KEY     = os.getenv("AZURE_API_KEY")
-AZURE_ENDPOINT    = "https://intern-training.cognitiveservices.azure.com/"
-AZURE_API_VERSION = "2025-01-01-preview"
-AZURE_DEPLOYMENT  = "gpt-4o-mini"
-
 AZURE_API_KEY     = os.environ.get("AZURE_API_KEY")
 AZURE_ENDPOINT    = os.environ.get("AZURE_ENDPOINT")
 AZURE_DEPLOYMENT  = os.environ.get("AZURE_DEPLOYMENT")
