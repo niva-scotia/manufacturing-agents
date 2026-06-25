@@ -111,15 +111,16 @@ TREND_CONFIG = {
     # fraction of the threshold range that must be covered by the trend
     # e.g. 0.20 means the sensor must have moved at least 20% of its
     # allowed range during the trend window to be considered significant
-    "min_range_fraction" : 0.20,
+    "min_range_fraction" : 0.15,
 
     # R-squared threshold — how linear/consistent the trend must be
     # 0.85 means 85% of variance must be explained by a straight line
     # higher = stricter, fewer false positives
     "min_r_squared"      : 0.85,
 
-    # only warn if breach is projected within this many hours
-    "max_hours_to_breach": 24.0,
+    "min_seconds_to_breach" : 5,      # ignore if this breach is within 5 seconds away
+
+    "max_seconds_to_breach": 86400,    # ignore if breach is beyond 24 hours
 }
 
 print("Thresholds:")
@@ -145,6 +146,31 @@ def check_anomaly(value, sensor, thresholds):
         return False
     return float(value) < rng["min"] or float(value) > rng["max"]
 
+def format_time_to_breach(steps):
+    """
+    Convert steps to a human readable time string.
+    Each step is approximately 1 second.
+    Automatically picks the most meaningful unit.
+    """
+    total_seconds = int(steps)
+
+    if total_seconds < 60:
+        return f"{total_seconds} seconds"
+    elif total_seconds < 3600:
+        minutes = total_seconds // 60
+        seconds = total_seconds % 60
+        if seconds == 0:
+            return f"{minutes} minutes"
+        return f"{minutes} minutes {seconds} seconds"
+    else:
+        hours   = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        seconds = total_seconds % 60
+        if minutes == 0 and seconds == 0:
+            return f"{hours} hours"
+        elif seconds == 0:
+            return f"{hours} hours {minutes} minutes"
+        return f"{hours} hours {minutes} minutes {seconds} seconds"
 
 def compute_trend(values, sensor, thresholds, config):
     """
@@ -159,7 +185,7 @@ def compute_trend(values, sensor, thresholds, config):
       2. The trend is consistent — R-squared >= min_r_squared
       3. The total movement covers at least min_range_fraction
          of the allowed threshold range
-      4. The projected breach is within max_hours_to_breach
+      4. The projected breach is within max_minutes_to_breach
       5. The current value is still within range (not already an anomaly)
     """
     rng = thresholds.get(sensor)
@@ -190,7 +216,7 @@ def compute_trend(values, sensor, thresholds, config):
     # check if slope is meaningful — must cover min_range_fraction
     # of the allowed range over the observation window
     allowed_range    = rng["max"] - rng["min"]
-    total_movement   = abs(slope * len(values))
+    total_movement   = abs(slope * config["min_steps"])
     range_fraction   = total_movement / allowed_range
 
     if range_fraction < config["min_range_fraction"]:
@@ -210,26 +236,30 @@ def compute_trend(values, sensor, thresholds, config):
     if abs(slope) < 1e-9:
         return None
 
-    steps_to_breach = int(distance / abs(slope))
-    hours_to_breach = steps_to_breach / 3600.0
+    steps_to_breach  = int(distance / abs(slope))
+    time_to_breach   = format_time_to_breach(steps_to_breach)
 
-    # only warn if breach is within the configured horizon
-    if hours_to_breach > config["max_hours_to_breach"]:
+    # ignore if breach is too soon — likely already an anomaly
+    if steps_to_breach < config["min_seconds_to_breach"]:
+        return None
+    
+    # ignore if breach is too far away to be actionable
+    if steps_to_breach > config["max_seconds_to_breach"]:
         return None
 
     return {
-        "direction"      : direction,
-        "slope"          : round(float(slope), 6),
-        "r_squared"      : round(float(r_squared), 4),
-        "range_fraction" : round(float(range_fraction), 4),
-        "current_value"  : round(float(current), 3),
-        "boundary"       : boundary,
-        "threshold_min"  : rng["min"],
-        "threshold_max"  : rng["max"],
-        "steps_to_breach": steps_to_breach,
-        "hours_to_breach": round(float(hours_to_breach), 4),
-        "window_size"    : len(values),
-        "values_seen"    : values.tolist(),
+        "direction"        : direction,
+        "slope"            : round(float(slope), 6),
+        "r_squared"        : round(float(r_squared), 4),
+        "range_fraction"   : round(float(range_fraction), 4),
+        "current_value"    : round(float(current), 3),
+        "boundary"         : boundary,
+        "threshold_min"    : rng["min"],
+        "threshold_max"    : rng["max"],
+        "steps_to_breach"  : steps_to_breach,
+        "time_to_breach"   : time_to_breach,
+        "window_size"      : len(values),
+        "values_seen"      : values.tolist(),
     }
 
 
@@ -265,7 +295,7 @@ def get_llm_explanation(event_type, sensor, details):
             f"Current value    : {details['current_value']}\n"
             f"Allowed range    : {details['threshold_min']} to {details['threshold_max']}\n"
             f"Projected breach : boundary {details['boundary']} in "
-            f"{details['hours_to_breach']:.2f} hours\n"
+            f"{details['time_to_breach']}\n"
             f"Trend consistency: R² = {details['r_squared']} "
             f"(1.0 = perfectly linear)\n"
             f"\n"
@@ -424,19 +454,19 @@ def run_agent(data, thresholds, trend_config, max_rows=None):
                         )
 
                         trend_entry = {
-                            "timestamp"      : datetime.now().strftime("%H:%M:%S"),
-                            "wafer_id"       : wafer_id,
-                            "step"           : step,
-                            "sensor"         : sensor,
-                            "current_value"  : trend["current_value"],
-                            "threshold_min"  : trend["threshold_min"],
-                            "threshold_max"  : trend["threshold_max"],
-                            "trend_direction": trend["direction"],
-                            "rate_per_step"  : trend["slope"],
-                            "r_squared"      : trend["r_squared"],
-                            "steps_to_breach": trend["steps_to_breach"],
-                            "hours_to_breach": trend["hours_to_breach"],
-                            "explanation"    : explanation,
+                            "timestamp"        : datetime.now().strftime("%H:%M:%S"),
+                            "wafer_id"         : wafer_id,
+                            "step"             : step,
+                            "sensor"           : sensor,
+                            "current_value"    : trend["current_value"],
+                            "threshold_min"    : trend["threshold_min"],
+                            "threshold_max"    : trend["threshold_max"],
+                            "trend_direction"  : trend["direction"],
+                            "rate_per_step"    : trend["slope"],
+                            "r_squared"        : trend["r_squared"],
+                            "steps_to_breach"  : trend["steps_to_breach"],
+                            "time_to_breach"   : trend["time_to_breach"],   # ← updated
+                            "explanation"      : explanation,
                         }
                         trend_log.append(trend_entry)
 
@@ -456,7 +486,7 @@ def run_agent(data, thresholds, trend_config, max_rows=None):
                         print(f"  R² (linearity): {trend['r_squared']}")
                         print(
                             f"\n  ⏱  If the {sensor} continues on this trend, "
-                            f"in {trend['hours_to_breach']:.2f} hours "
+                            f"in {trend['time_to_breach']} "
                             f"it will produce an error."
                         )
                         print(f"  Note          : {explanation}")
@@ -488,7 +518,7 @@ def run_agent(data, thresholds, trend_config, max_rows=None):
                   f"Wafer {t['wafer_id']} | "
                   f"Step {t['step']:>3} | "
                   f"{t['sensor']:<20} {arrow} "
-                  f"→ breach in {t['hours_to_breach']:.2f}h  "
+                  f"→ breach in {t['time_to_breach']}"
                   f"(R²={t['r_squared']})")
 
     print("=" * 60)
@@ -527,35 +557,6 @@ if trends:
     print(df_trends[[
         'timestamp', 'wafer_id', 'step', 'sensor',
         'current_value', 'trend_direction',
-        'rate_per_step', 'r_squared', 'hours_to_breach'
+        'rate_per_step', 'r_squared', 'time_to_breach'
     ]].to_string(index=False))
 
-# ## Cell 11 — Tune trend sensitivity
-# If you are getting too many trend warnings, increase `min_r_squared`
-# or `min_range_fraction`. If you want earlier warnings, decrease them.
-# 
-
-# Tighter trend detection — fewer, more confident warnings
-STRICT_TREND_CONFIG = {
-    "min_steps"          : 10,    # need more steps of evidence
-    "min_range_fraction" : 0.30,  # trend must cover 30% of allowed range
-    "min_r_squared"      : 0.92,  # must be very linear
-    "max_hours_to_breach": 12.0,  # only warn if breach within 12 hours
-}
-
-# Looser trend detection — earlier, more sensitive warnings
-SENSITIVE_TREND_CONFIG = {
-    "min_steps"          : 5,
-    "min_range_fraction" : 0.10,
-    "min_r_squared"      : 0.75,
-    "max_hours_to_breach": 24.0,
-}
-
-# uncomment to re-run with different sensitivity
-# anomalies, trends = run_agent(
-#     data         = data,
-#     thresholds   = USER_THRESHOLDS,
-#     trend_config = STRICT_TREND_CONFIG,
-#     max_rows     = 500
-# )
-print("Sensitivity configs defined. Uncomment to run.")
