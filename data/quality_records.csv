@@ -1,0 +1,555 @@
+ncr_report,past_machine_defects,inspection_results,spc_trend,customer_complaint,quality_history_score
+"NON-CONFORMANCE REPORT | Wafer 2915 | LOT_29B | CHA | 2024-03-04 | Recipe: METAL_ETCH_A_V3 | Operator: OP_NGUYEN | WO: WO-CHA-2915
+
+FAULT: TCP +50 — TCP Top Power deviated +50W above set-point.
+
+WHAT WAS OBSERVED AT RUN TIME:
+Endpoint peak registered at 2323 counts against a normal mean of ~1,879 — a 24% elevation, consistent with excess plasma density from over-powered TCP source. Endpoint mean: 1555.1. Pressure held at 1187.3 mTorr (normal). RF phase std: 745.7. Operator note: None recorded. 
+
+METROLOGY:
+Etch rate: not collected — lot held before metrology. CD bias: not collected. Uniformity: not collected. Pass/Fail: PENDING — lot held, metrology not completed.. OEE: 0.0000 (quality rate = 0 confirms wafer failed quality gate).
+
+DEFECTS IDENTIFIED:
+Over-etch across die. CD widening beyond specification on critical metal layer. Pattern collapse risk on sub-100nm features. The elevated endpoint signal is direct evidence of excess plasma ion density caused by +50W TCP over-power.
+
+ROOT CAUSE RECORDED IN NCR:
+TCP generator power set-point overridden or impedance matching network fault. Excess plasma density caused accelerated etch beyond process specification. Probable causes in order of likelihood: (1) recipe parameter upload error loading wrong TCP set-point; (2) impedance matching network fault causing generator to deliver more power than commanded; (3) TCP generator calibration drift after 1241 hours of operation.
+
+CORRECTIVE ACTION:
+Lot held. TCP generator output verified at chamber terminal. Reference wafer run. Impedance matching network recalibration scheduled. PM work order raised: WO-CHA-2915.
+
+NCR STATUS: OPEN | SEVERITY: CRITICAL","CHAMBER CHA DEFECT HISTORY AT TIME OF THIS FAULT:
+
+No prior fault events recorded on CHA before this run. This is the first quality deviation on CHA in the current production history. RF generator hours at time of fault: 1241.04 hrs. PM current: 18 wafers since last PM (threshold: 35). PM not a likely contributor. Open work order active on CHA at time of fault: WO-CHA-2915. This indicates a known issue was already being tracked on this chamber.","INSPECTION FINDINGS:
+
+Visual inspection result: FAIL (quality rate = 0). Etch rate: not collected — wafer held before metrology step. CD bias: not collected. Uniformity: not collected. Endpoint peak 2323 is 24% above normal mean — strong indicator of elevated plasma density consistent with TCP over-power. SEM review: REQUIRED. Disposition: LOT HELD pending engineering review.","SPC FINDINGS:
+
+Parameter: TCP Top Power (tcp_top_pwr). Rule violated: Nelson Rule 1 — single point exceeds 3-sigma upper control limit. Alert level: RED. A +50W deviation on a process with natural std of ~4.7W represents a >10-sigma excursion — this is not drift, it is an acute step-change event. This is the FIRST tcp_top_pwr Rule 1 violation on CHA in this production history. No prior trend was visible on SPC charts — the event onset was sudden. Recommended action: HOLD LOT. Do not release until TCP generator output is verified.",No customer complaint raised for this event. Lot was held internally before shipment.,1
+"NON-CONFORMANCE REPORT | Wafer 2916 | LOT_29B | CHB | 2024-03-04 | Recipe: METAL_ETCH_A_V3 | Operator: OP_SMITH | WO: WO-CHB-2916
+
+FAULT: RF -12 — RF Bottom Power deviated -12W below set-point.
+
+WHAT WAS OBSERVED AT RUN TIME:
+Endpoint peak: 1780. Endpoint mean: 1197.0. Pressure: 1186.7 mTorr. RF phase std: 1035.7. Operator note: None.
+
+METROLOGY:
+Etch rate: not collected — lot held before metrology. CD bias: not collected. Uniformity: not collected. Pass/Fail: PENDING.. OEE: 0.0000.
+
+DEFECTS IDENTIFIED:
+Under-etch. Reduced RF bias means less ion energy at wafer surface, resulting in insufficient directionality for anisotropic etch. Notching on sidewall features expected. Sidewall bowing and positive CD bias consistent with under-powered RF bias.
+
+ROOT CAUSE RECORDED IN NCR:
+RF bias -12W loss. Most likely: (1) degraded RF cable introducing impedance mismatch — generator delivers less power than commanded; (2) RF matching network component failure; (3) RF power meter calibration error masking the true delivery shortfall. Sudden onset with no prior SPC drift points to hardware fault. RF gen hrs: 987.74. PM: 18 wafers.
+
+CORRECTIVE ACTION:
+RF cable inspected. Matching network calibrated. Power meter verified. WO: WO-CHB-2916.
+
+NCR STATUS: OPEN | SEVERITY: HIGH","CHAMBER CHB DEFECT HISTORY:
+
+No prior faults on CHB. First deviation on this chamber. RF gen hrs: 987.74. PM: 18 wafers — current. Open WO: WO-CHB-2916.","INSPECTION FINDINGS:
+
+Result: PENDING — metrology not collected. Etch rate: not collected. Under-etch and notching expected based on RF -12W deviation. Endpoint peak 1780. SEM: REQUIRED.","SPC FINDINGS:
+
+Parameter: rf_pwr. Rule violated: Rule 1 (>3σ below LCL). Alert: RED. Low-side violation — RF power loss. First rf_pwr violation. Sudden onset (no prior drift) consistent with hardware fault. Action: INVESTIGATE.",No customer complaint raised. Lot held.,2
+"NON-CONFORMANCE REPORT | Wafer 2917 | LOT_29B | CHA | 2024-03-04 | Recipe: METAL_ETCH_A_V3 | Operator: OP_CHEN | WO: WO-CHA-2917
+
+FAULT: RF +10 — RF Bottom Power deviated +10W above set-point.
+
+WHAT WAS OBSERVED AT RUN TIME:
+Endpoint peak: 1838. Endpoint mean: 1227.0. RF phase std: 657.4 — notably BELOW normal mean of 944, which is counter-intuitive for an RF fault and may indicate the matching network was partially compensating. Pressure: 1185.4 mTorr. Operator note: Chamber flagged. QC review needed.
+
+METROLOGY:
+Etch rate: 396.7 Å/min (-65.3 vs baseline). CD bias: -7.40 nm (negative bias = CD narrowing, consistent with elevated RF bias). Uniformity: 12.42%. Pass/Fail: FAIL. OEE: 0.0000.
+
+DEFECTS IDENTIFIED:
+Ion bombardment damage on critical layer. CD narrowing of approximately 4–5 nm, consistent with elevated ion energy from increased RF bias voltage. Micro-masking detected. Negative CD bias is the diagnostic signature of RF over-power.
+
+ROOT CAUSE RECORDED IN NCR:
+RF bias elevated +10W. Most likely: (1) recipe parameter error on RF bias channel — wrong set-point loaded; (2) RF matching network calibration drift causing generator to compensate with higher output; (3) DC bias controller malfunction. RF generator hours: 1241.07. PM: 19 wafers.
+
+CORRECTIVE ACTION:
+Lot held. RF bias set-point verified. Matching network tuner inspected. RF power calibration check run. WO: WO-CHA-2917.
+
+NCR STATUS: OPEN | SEVERITY: HIGH","CHAMBER CHA DEFECT HISTORY AT TIME OF THIS FAULT:
+
+Prior faults on CHA: TCP +50. RF gen hrs: 1241.07. PM: 19 wafers — current. Open WO: WO-CHA-2917.","INSPECTION FINDINGS:
+
+Result: FAIL. Etch rate 396.7 Å/min (-65.3). CD bias: -7.40 nm — NEGATIVE bias confirms ion bombardment / CD narrowing. This is the diagnostic signature of RF over-power. Uniformity: 12.42%. SEM triggered. Endpoint peak 1838.","SPC FINDINGS:
+
+Parameter: rf_pwr. Rule violated: Nelson Rule 1 (>3σ above UCL). Alert level: RED. This is occurrence #2 of rf_pwr SPC violations — pattern is developing. Note: rf_pwr and tcp_top_pwr violations co-occurring in the same lot suggests the chamber power delivery system broadly is in an unstable state. Action: INVESTIGATE. RF matching network inspection required.",No customer complaint raised.,2
+"NON-CONFORMANCE REPORT | Wafer 2918 | LOT_29B | CHB | 2024-03-04 | Recipe: METAL_ETCH_A_V3 | Operator: OP_PATEL
+
+FAULT: Pr +3 — Chamber Pressure deviated +3 mTorr above set-point.
+
+WHAT WAS OBSERVED AT RUN TIME:
+Pressure mean: 1187.2 mTorr (normal baseline ~1,189 mTorr). Endpoint peak: 1840. Endpoint mean: 1168.2. RF phase std: 1154.2. Operator note: None.
+
+METROLOGY:
+Etch rate: 382.2 Å/min (-79.8 vs baseline). Higher pressure reduces mean free path, causing ion scattering and a reduced effective etch rate — negative etch rate deviation is expected and confirmed. CD bias: -7.94 nm (negative = increased lateral/isotropic etch component from scattered ions). Uniformity: 13.37%. Pass/Fail: FAIL. OEE: 0.0000.
+
+DEFECTS IDENTIFIED:
+Reduced mean free path causing ion scattering. Etch non-uniformity across wafer. Negative CD bias from isotropic etch component. Uniformity of 13.37% significantly above process mean of 3.78%.
+
+ROOT CAUSE RECORDED IN NCR:
+Chamber pressure elevated +3 mTorr. Probable causes: (1) VAT valve controller drift causing throttle valve to hold a more closed position; (2) APC calibration offset; (3) chamber micro-leak adding to gas load. RF gen hrs: 987.77. PM: 19 wafers.
+
+CORRECTIVE ACTION:
+APC set-point and calibration verified. VAT valve position feedback checked. Chamber base pressure test run to exclude micro-leak.
+
+NCR STATUS: OPEN | SEVERITY: MEDIUM","CHAMBER CHB DEFECT HISTORY:
+
+Prior faults: RF -12.  RF gen hrs: 987.77. PM: 19 wafers — current.","INSPECTION FINDINGS:
+
+Result: FAIL. Etch rate 382.2 Å/min (-79.8). CD bias -7.94 nm (negative — scattering signature). Uniformity 13.37%. Non-uniformity confirmed. SEM: REQUIRED.","SPC FINDINGS:
+
+Parameter: chamber pressure. Rule: Rule 4 (2/3 >2σ). Alert: YELLOW. First pressure violation. Action: MONITOR. APC calibration scheduled.",No customer complaint raised.,4
+"NON-CONFORMANCE REPORT | Wafer 2936 | LOT_29B | CHA | 2024-03-04 | Recipe: METAL_ETCH_A_V3 | Operator: OP_NGUYEN
+
+FAULT: TCP +10 — TCP Top Power deviated +10W above set-point.
+
+WHAT WAS OBSERVED AT RUN TIME:
+Endpoint peak: 1903. Endpoint mean: 1270.9. Pressure mean: 1187.1 mTorr. RF phase std: 965.4. Operator note: None recorded.
+
+METROLOGY:
+Etch rate: 397.2 Å/min (-64.8 vs baseline). CD bias: -5.00 nm. Uniformity: 18.83% (process target <15% — EXCEEDS TARGET.) Pass/Fail: FAIL. OEE: 0.0000.
+
+DEFECTS IDENTIFIED:
+Borderline over-etch. CD measurements within specification but at upper tolerance boundary. Uniformity of 18.83% is significantly above process mean of 3.78% — this is the most diagnostic indicator. Elevated endpoint mean (1270.9 vs normal ~1,262) confirms above-nominal plasma activity.
+
+ROOT CAUSE RECORDED IN NCR:
+Minor TCP power set-point drift of +10W. At this magnitude, probable causes are early-stage TCP generator aging, chamber wall coating variation affecting impedance, or PM being overdue (current count: 20 wafers — within schedule.) This is a lower-severity event but is meaningful in context: this chamber has already experienced a TCP +50 violation earlier in this lot, suggesting TCP power control on this chamber is in an unstable state.
+
+CORRECTIVE ACTION:
+Lot flagged for enhanced inspection. TCP monitoring frequency increased. PM window scheduled. WO: WO-CHA-2936.
+
+NCR STATUS: OPEN | SEVERITY: MEDIUM","CHAMBER CHA DEFECT HISTORY AT TIME OF THIS FAULT:
+
+Prior faults on CHA this lot: TCP +50; RF +10. IMPORTANT CONTEXT: TCP +10 is the third fault on CHA within LOT_29B alone (TCP +50 and RF +10 preceded it). This density of faults within a single lot on one chamber is a strong indicator of systemic chamber instability rather than isolated events. RF generator hours: 1241.10 hrs. PM wafer count: 20 (current.) Open WO: WO-CHA-2936.","INSPECTION FINDINGS:
+
+Result: FAIL. Etch rate: 397.2 Å/min (-64.8 vs baseline). CD bias: -5.00 nm. Uniformity: 18.83%. Endpoint mean 1270.9 elevated. Borderline over-etch confirmed. SEM review triggered due to uniformity exceeding 15% threshold.","SPC FINDINGS:
+
+Parameter: tcp_top_pwr. Rule violated: Nelson Rule 4 (2 of 3 consecutive points >2σ). Alert level: YELLOW. This is the second tcp_top_pwr SPC event on CHA within this lot (Rule 1 violation already recorded on wafer 2915). Two tcp_top_pwr alerts on the same chamber within the same lot is a PATTERN — not random variation. The SPC chart shows a sustained upward shift in TCP power rather than oscillation around the mean. Action taken: MONITOR. Engineering notified of recurring pattern.",No customer complaint raised for this event.,4
+"NON-CONFORMANCE REPORT | Wafer 2937 | LOT_29B | CHB | 2024-03-04 | Recipe: METAL_ETCH_A_V3 | Operator: OP_SMITH
+
+FAULT: BCl3 +5 — BCl3 Flow deviated +5 sccm above set-point.
+
+WHAT WAS OBSERVED AT RUN TIME:
+Endpoint peak: 1744 (below normal mean). Endpoint mean: 1186.8. Pressure mean: 1190.6 mTorr — slightly elevated (above normal range), consistent with excess BCl3 contributing to total gas load. SCHEDULED_PM event during run (520 sec). Operator note: Recipe completed but something looked off.
+
+METROLOGY:
+Etch rate: 369.3 Å/min — 92.7 Å/min (20%) below baseline. Etch rate SUPPRESSION is the primary quality signature of BCl3 over-delivery: excess BCl3 forms a passivation layer that inhibits the etch reaction. CD bias: -15.80 nm (highly negative = severe CD narrowing from passivation). Uniformity: 7.04%. Pass/Fail: FAIL. OEE: 0.0000.
+
+DEFECTS IDENTIFIED:
+Passivation layer thickening confirmed. Etch rate suppressed to 369.3 Å/min — the lowest BCl3-related etch rate in this dataset. CD bias of -15.80 nm is an extreme outlier vs the normal range of ±3 nm. Passivation residue confirmed on 4 of 5 SEM inspection sites. Wafer disposition: SCRAP.
+
+ROOT CAUSE RECORDED IN NCR:
+BCl3 MFC over-delivery of +5 sccm. The BCl3 process has a natural variation of only ±0.5 sccm — a +5 sccm excursion is a 10-sigma event, indicating MFC failure not process noise. Most likely: (1) MFC valve calibration drift (zero-point offset); (2) valve seat wear causing over-delivery at commanded position; (3) gas panel back-pressure from blocked downstream filter. RF gen hrs: 987.80. PM: 20 wafers.
+
+CORRECTIVE ACTION:
+BCl3 MFC zero-point and span calibration check. Replace if accuracy >±1% FS. Gas line leak check. Wafer scrapped.
+
+NCR STATUS: OPEN | SEVERITY: HIGH","CHAMBER CHB DEFECT HISTORY:
+
+Prior faults on CHB: RF -12; Pr +3.  RF gen hrs: 987.80. PM: 20 wafers — current.","INSPECTION FINDINGS:
+
+Result: FAIL. Etch rate 369.3 Å/min — 20% below baseline. CD bias -15.80 nm — extreme negative outlier indicating heavy passivation. This CD bias reading (-15.80 nm) is the most extreme value recorded in this dataset. Uniformity 7.04%. Passivation residue confirmed under SEM. Scrap disposition.","SPC FINDINGS:
+
+Parameter: bcl3_flow (I-MR chart). Rule violated: Rule 4 (2/3 >2σ). Alert: RED. A +5 sccm deviation on a 0.5 sccm-std process = ~10σ excursion. MFC failure, not process drift. Action: HOLD LOT. BCl3 MFC replacement scheduled.",No customer complaint raised. Wafer scrapped internally.,2
+"NON-CONFORMANCE REPORT | Wafer 2938 | LOT_29B | CHA | 2024-03-04 | Recipe: METAL_ETCH_A_V3 | Operator: OP_CHEN
+
+FAULT: Pr -2 — Chamber Pressure deviated -2 mTorr below set-point.
+
+WHAT WAS OBSERVED AT RUN TIME:
+RECIPE_RELOAD event recorded (789 sec). Endpoint peak: 1836. Endpoint mean: 1243.9. Pressure mean: 1186.9 mTorr. Operator note: None.
+
+METROLOGY:
+Etch rate: not collected. Uniformity: not collected. Pass/Fail: PENDING..
+
+DEFECTS IDENTIFIED:
+Below-target pressure increases ion energy — faceting and mask erosion risks. The recipe reload event may have caused the pressure transient. Review recipe reload procedure for APC set-point restoration.
+
+ROOT CAUSE RECORDED IN NCR:
+Pressure -2 mTorr. Coincident recipe reload suggests APC set-point was not correctly restored after reload. Secondary: VAT valve over-opening.
+
+CORRECTIVE ACTION:
+Recipe reload procedure reviewed. APC set-point verified post-reload. No immediate hold required.
+
+NCR STATUS: OPEN | SEVERITY: LOW","CHAMBER CHA DEFECT HISTORY:
+
+Prior faults: TCP +50; RF +10; TCP +10. RF gen hrs: 1241.13. PM: 21 wafers — current.","INSPECTION FINDINGS:
+
+Result: PENDING. Metrology not collected. Minor pressure deviation. Endpoint peak 1836. Faceting risk flagged.","SPC FINDINGS:
+
+Parameter: pressure. Rule: Rule 3 (6 consecutive trend, low side). Alert: YELLOW. Recipe reload event coincides with deviation. Occurrence #2. Action: MONITOR.",No customer complaint raised.,5
+"NON-CONFORMANCE REPORT | Wafer 2939 | LOT_29B | CHB | 2024-03-04 | Recipe: METAL_ETCH_A_V3 | Operator: OP_PATEL
+
+FAULT: Cl2 -5 — Cl2 Flow deviated -5 sccm below set-point.
+
+WHAT WAS OBSERVED AT RUN TIME:
+Endpoint peak: 1753. Endpoint mean: 1189.9. Pressure: 1185.4 mTorr. Operator note: Alarm on chamber. Flagged for review.
+
+METROLOGY:
+Etch rate: not collected. CD bias: not collected. Uniformity: not collected. Pass/Fail: PENDING.. OEE: 0.0000.
+
+DEFECTS IDENTIFIED:
+Under-etch from insufficient Cl2. Aluminium residue expected on contact structures — without adequate Cl2, native oxide is not fully removed. Etch stop on two die confirmed. The operator flagged an alarm: 'Alarm on chamber. Flagged for review.' — suggesting the abnormality was visible in real time.
+
+ROOT CAUSE RECORDED IN NCR:
+Cl2 MFC under-delivery -5 sccm. Most likely: (1) partial valve obstruction from process byproduct deposition; (2) Cl2 supply pressure drop (cylinder depletion or regulator failure); (3) MFC thermal drift. RF gen hrs: 987.83. PM: 21 wafers.
+
+CORRECTIVE ACTION:
+Cl2 cylinder pressure checked. MFC calibrated. Regulator output verified.
+
+NCR STATUS: OPEN | SEVERITY: MEDIUM","CHAMBER CHB DEFECT HISTORY:
+
+Prior faults: RF -12; Pr +3; BCl3 +5.  RF gen hrs: 987.83. PM: 21 wafers — current.","INSPECTION FINDINGS:
+
+Result: PENDING. Etch rate: not collected. Under-etch and aluminium residue expected. Endpoint peak 1753 suppressed.","SPC FINDINGS:
+
+Parameter: cl2_flow. Rule: Rule 4, low side. Alert: YELLOW. First cl2_flow violation on this chamber. Action: MONITOR.",No customer complaint raised.,4
+"NON-CONFORMANCE REPORT | Wafer 2940 | LOT_29B | CHA | 2024-03-04 | Recipe: METAL_ETCH_A_V3 | Operator: OP_NGUYEN | WO: WO-CHA-2940
+
+FAULT: He Chuck — He Backside Cooling Pressure loss.
+
+WHAT WAS OBSERVED AT RUN TIME:
+Operator note: 'Operator noticed instability. Reported.' — operator confirmed visible instability in real time. Endpoint peak: 1776. Endpoint mean: 1199.6. Pressure mean: 1187.7 mTorr. RF phase std: 709.0.
+
+METROLOGY:
+Etch rate: 371.5 Å/min (-90.5 vs baseline). Without He backside cooling, the wafer overheats. Edge zones heat faster than centre, driving the etch rate non-uniformity. The reduced etch rate reflects the combined effect of thermal non-uniformity disrupting the etch chemistry. CD bias: +7.38 nm (positive = edge zones over-etched relative to centre). Uniformity: 18.66% — second-highest in this lot. Pass/Fail: FAIL. OEE: 0.0000.
+
+DEFECTS IDENTIFIED:
+Thermal non-uniformity across wafer diameter. Edge die significantly hotter than centre due to loss of He cooling contact. Wafer bow detected. Edge hot-spot over-etch pattern confirmed on sampled die. Centre-to-edge temperature differential estimated at 15–20°C based on etch rate distribution.
+
+ROOT CAUSE RECORDED IN NCR:
+He backside cooling pressure loss. ESC (Electrostatic Chuck) He seal O-ring degradation is the most likely cause — seal failure allows He to bypass the wafer-chuck interface rather than maintaining pressure. Secondary: He supply flow controller failure. The sudden onset (no prior He pressure trend on SPC) is consistent with an acute seal breach rather than gradual wear. RF gen hrs: 1241.16. PM: 22 wafers.
+
+CORRECTIVE ACTION:
+STOP processing on CHA. ESC He seal inspected — O-ring replaced. He leak check performed at full set-point. ESC clamping voltage verified. WO: WO-CHA-2940.
+
+NCR STATUS: OPEN | SEVERITY: HIGH","CHAMBER CHA DEFECT HISTORY:
+
+Prior faults on CHA: TCP +50; RF +10; TCP +10; Pr -2. No prior He Chuck events recorded — this is an acute failure, not a recurring pattern. RF gen hrs: 1241.16. PM: 22 wafers — current. Open WO: WO-CHA-2940.","INSPECTION FINDINGS:
+
+Result: FAIL. Etch rate 371.5 Å/min (-90.5). Thermal non-uniformity confirmed — etch rate varies across wafer radius. CD bias +7.38 nm (edge over-etch signature). Uniformity 18.66% — above 15% target. Wafer bow confirmed. SEM: REQUIRED on edge die.","SPC FINDINGS:
+
+Parameter: he_press (He backside pressure). Rule: Rule 1 (>3σ below LCL). Alert: RED. First He pressure violation in the run history — acute failure event. Sudden onset with no prior drift is consistent with hardware failure (seal breach) rather than gradual degradation. Operator observed instability in real time. Action: STOP processing. Inspect ESC immediately.",No customer complaint raised. Lot held internally.,2
+"NON-CONFORMANCE REPORT | Wafer 3120 | LOT_31B | CHA | 2024-03-25 | Recipe: METAL_ETCH_A_V3 | Operator: OP_CHEN | WO: WO-CHA-3120
+
+FAULT: TCP +30 — TCP Top Power deviated +30W above set-point.
+
+WHAT WAS OBSERVED AT RUN TIME:
+Endpoint peak: 3464 counts — 84% above normal mean. Endpoint mean: 2324.1 (normal mean ~1,262). Elevated endpoint signal confirms higher-than-expected plasma activity consistent with TCP over-power. Pressure mean: 1189.4 mTorr. RF phase std: 1269.3. Operator note: None recorded.
+
+METROLOGY:
+Etch rate: 429.3 Å/min (-32.7 vs baseline 462). CD bias: 14.67 nm. Uniformity: 8.74%. Pass/Fail: FAIL. OEE: 0.0000.
+
+DEFECTS IDENTIFIED:
+Over-etch on metal layer. CD widening of approximately 2–3 nm on sampled die. Endpoint signal triggered earlier than expected — consistent with elevated etch rate from excess TCP power. Pattern collapse risk on narrow features.
+
+ROOT CAUSE RECORDED IN NCR:
+TCP generator power set-point drift of +30W. At this magnitude, probable causes are: (1) recipe version mismatch — chamber controller loaded an older recipe revision with a different TCP set-point; (2) TCP generator output stage partial calibration loss; (3) impedance matching drift after 1242 hours of generator operation. PM wafer count is 41 — OVERDUE, which increases drift risk.
+
+CORRECTIVE ACTION:
+Lot held. Recipe set-point verified against MES master. TCP generator calibration check performed. Impedance matching PM scheduled.
+
+NCR STATUS: OPEN | SEVERITY: HIGH","CHAMBER CHA DEFECT HISTORY AT TIME OF THIS FAULT:
+
+Prior faults on CHA (chronological): TCP +50; RF +10; TCP +10; Pr -2; He Chuck. RECURRING TCP POWER DEVIATION on this chamber. RF generator hours: 1241.69 hrs. PM OVERDUE: 41 wafers since last PM. Open WO: WO-CHA-3120.","INSPECTION FINDINGS:
+
+Result: FAIL. Etch rate: 429.3 Å/min (-32.7 vs baseline). CD bias: 14.67 nm. Uniformity: 8.74% (Within target.) Endpoint peak 3464 elevated vs normal mean 1,879. Over-etch confirmed on sampled die. SEM review required.","SPC FINDINGS:
+
+Parameter: tcp_top_pwr. Rule violated: Nelson Rule 1 (1 point >3σ UCL). Alert level: RED. +30W deviation on a 4.7W-std process = ~6-sigma excursion. SPC chart history on CHA shows a Rule 4 event (2/3 points >2σ) two lots prior, indicating gradual drift before this Rule 1 violation — pattern is consistent with progressive TCP generator degradation. Action taken: INVESTIGATE. Lot held.",No customer complaint raised. Lot held internally before shipment.,2
+"NON-CONFORMANCE REPORT | Wafer 3121 | LOT_31B | CHB | 2024-03-25 | Recipe: METAL_ETCH_A_V3 | Operator: OP_PATEL
+
+FAULT: Cl2 +5 — Cl2 Flow deviated +5 sccm above set-point.
+
+WHAT WAS OBSERVED AT RUN TIME:
+Endpoint peak: 2941. Endpoint mean: 1973.0. Pressure mean: 1191.4 mTorr — slightly elevated at 1191.4 vs normal ~1,189 mTorr (excess Cl2 increases gas load). Operator note: Recipe completed but something looked off.
+
+METROLOGY:
+Etch rate: 439.1 Å/min (-22.9 vs baseline). Elevated Cl2 increases etch rate — positive etch rate deviation confirms over-delivery. CD bias: 4.94 nm (positive bias = CD widening from lateral etch). Uniformity: 18.06% — significantly degraded. Pass/Fail: FAIL. OEE: 0.0000.
+
+DEFECTS IDENTIFIED:
+Over-etch from elevated Cl2. Lateral undercut on metal line structures. Sidewall roughness elevated. The positive CD bias combined with elevated etch rate is the characteristic dual signature of Cl2 over-delivery. Uniformity of 18.06% indicates non-uniform Cl2 distribution.
+
+ROOT CAUSE RECORDED IN NCR:
+Cl2 MFC over-delivery +5 sccm. Probable causes: (1) MFC valve seat wear causing increased flow at commanded valve position; (2) recent recipe modification that altered Cl2 set-point; (3) gas delivery pressure fluctuation. RF gen hrs: 988.41. PM: 41 wafers (OVERDUE.).
+
+CORRECTIVE ACTION:
+Recipe set-point verified. Cl2 MFC calibration checked. Valve seat inspected.
+
+NCR STATUS: OPEN | SEVERITY: MEDIUM","CHAMBER CHB DEFECT HISTORY:
+
+Prior faults: RF -12; Pr +3; BCl3 +5; Cl2 -5. Cl2 recurring on this chamber.  RF gen hrs: 988.41. PM: 41 wafers — OVERDUE.","INSPECTION FINDINGS:
+
+Result: FAIL. Etch rate 439.1 Å/min (-22.9 — elevated). CD bias +4.94 nm — positive, confirming CD widening from lateral over-etch. Uniformity 18.06%. Lateral undercut confirmed. SEM: REQUIRED.","SPC FINDINGS:
+
+Parameter: cl2_flow (I-MR chart). Rule: Rule 4 (2/3 >2σ). Alert: YELLOW. Occurrence #2 of cl2_flow violations. Action: MONITOR. MFC calibration scheduled.",No customer complaint raised.,4
+"NON-CONFORMANCE REPORT | Wafer 3122 | LOT_31B | CHA | 2024-03-25 | Recipe: METAL_ETCH_A_V3 | Operator: OP_NGUYEN | WO: WO-CHA-3122
+
+FAULT: RF +8 — RF Bottom Power deviated +8W above set-point.
+
+WHAT WAS OBSERVED AT RUN TIME:
+Endpoint peak: 1730 (abnormally low for CHA — compare to normal CHA mean of ~2,900 for this recipe). Endpoint mean: 1456.3. RF phase std: 648.7. Pressure: 1190.3 mTorr. Operator note: Operator noticed instability. Reported.
+
+METROLOGY:
+Etch rate: 435.5 Å/min (-26.5 vs baseline). CD bias: -5.84 nm (negative = CD narrowing). Uniformity: 19.68% — HIGHEST in this lot at 19.7%. Pass/Fail: FAIL. OEE: 0.0000.
+
+DEFECTS IDENTIFIED:
+Ion bombardment damage. CD narrowing confirmed. Worst uniformity in this lot. The low endpoint peak combined with negative CD bias and poor uniformity forms the characteristic signature of RF bias over-power.
+
+ROOT CAUSE RECORDED IN NCR:
+RF bias +8W. Partial recipe upload error (RF channel set-point not updated to current revision) or RF matching network component aging. This is the third RF power violation in the overall run history — an escalating pattern. RF gen hrs: 1241.70. PM: 42 — OVERDUE.
+
+CORRECTIVE ACTION:
+Lot held. Recipe revision verified. RF matching network capacitor positions checked. WO: WO-CHA-3122.
+
+NCR STATUS: OPEN | SEVERITY: HIGH","CHAMBER CHA DEFECT HISTORY:
+
+Prior faults on CHA: TCP +50; RF +10; TCP +10; Pr -2; He Chuck; TCP +30. RF power recurring on this chamber. PM: 42 wafers — OVERDUE. RF gen hrs: 1241.70. Open WO: WO-CHA-3122.","INSPECTION FINDINGS:
+
+Result: FAIL. Etch rate 435.5 Å/min (-26.5). CD bias -5.84 nm — negative, confirming CD narrowing from RF over-power. Uniformity 19.68% — highest in this lot. SEM: REQUIRED.","SPC FINDINGS:
+
+Parameter: rf_pwr. Rule violated: Rule 1 (>3σ). Alert: RED. Occurrence #3 in run history. RF power violations are now appearing on both chambers (CHB: RF -12 and RF +10; CHA: RF +8). This multi-chamber pattern suggests the RF matching network calibration schedule is inadequate across the tool set. Process engineering escalation recommended.",No customer complaint raised.,2
+"NON-CONFORMANCE REPORT | Wafer 3141 | LOT_31B | CHB | 2024-03-25 | Recipe: METAL_ETCH_A_V3 | Operator: OP_SMITH
+
+FAULT: BCl3 -5 — BCl3 Flow deviated -5 sccm below set-point.
+
+WHAT WAS OBSERVED AT RUN TIME:
+Endpoint peak: 3015. Endpoint mean: 1972.0. Pressure mean: 1186.2 mTorr. RF phase std: 968.8. Operator note: Operator noticed instability. Reported.
+
+METROLOGY:
+Etch rate: 429.3 Å/min (-32.7 vs baseline). BCl3 under-delivery reduces passivation, which increases lateral etch — the combination of below-nominal etch rate and edge non-uniformity is diagnostic. CD bias: -4.48 nm. Uniformity: 16.11%. Pass/Fail: FAIL. OEE: 0.0000.
+
+DEFECTS IDENTIFIED:
+Oxidation residue on contact structures. Etch non-uniformity — edge die show different etch behaviour from centre, consistent with non-uniform BCl3 distribution. Notching on sidewall features. Reduced passivation from BCl3 under-delivery allows lateral etch component to become significant.
+
+ROOT CAUSE RECORDED IN NCR:
+BCl3 MFC under-delivery -5 sccm. Probable causes: (1) partial MFC valve blockage from process byproduct accumulation; (2) BCl3 supply pressure drop — cylinder nearing depletion or regulator degradation; (3) MFC span calibration drift. RF gen hrs: 988.44. PM: 42 wafers (OVERDUE.).
+
+CORRECTIVE ACTION:
+BCl3 cylinder pressure verified. MFC calibration checked. Gas line filter inspected.
+
+NCR STATUS: OPEN | SEVERITY: MEDIUM","CHAMBER CHB DEFECT HISTORY:
+
+Prior faults on CHB: RF -12; Pr +3; BCl3 +5; Cl2 -5; Cl2 +5. RECURRING BCl3 DEVIATION — both over and under delivery recorded. MFC instability confirmed.  RF gen hrs: 988.44. PM: 42 wafers — OVERDUE.","INSPECTION FINDINGS:
+
+Result: FAIL. Etch rate 429.3 Å/min (-32.7). CD bias -4.48 nm. Uniformity 16.11% (exceeds 15% target.). Oxidation residue and notching detected. SEM: REQUIRED.","SPC FINDINGS:
+
+Parameter: bcl3_flow (I-MR chart). Rule violated: Rule 4 (2/3 >2σ), low side. Alert: YELLOW/RED. -5 sccm on 0.5 sccm-std = 10σ. MFC failure, not noise. Prior BCl3 violations in history (1 total). The BCl3 MFC has now produced deviations in BOTH directions — a classic sign of end-of-life valve behaviour. Action: INVESTIGATE. MFC replacement recommended.",No customer complaint raised.,4
+"NON-CONFORMANCE REPORT | Wafer 3142 | LOT_31B | CHA | 2024-03-25 | Recipe: METAL_ETCH_A_V3 | Operator: OP_CHEN
+
+FAULT: Pr +2 — Chamber Pressure deviated +2 mTorr above set-point.
+
+WHAT WAS OBSERVED AT RUN TIME:
+Endpoint peak: 2927. Endpoint mean: 1907.6. Pressure mean: 1190.0 mTorr. RF phase std: 837.4. Operator note: None.
+
+METROLOGY:
+Etch rate: not collected. CD bias: not collected. Uniformity: not collected. Pass/Fail: PENDING.. OEE: 0.0000.
+
+DEFECTS IDENTIFIED:
+Minor pressure elevation. Mild etch rate reduction and uniformity degradation expected. Metrology not collected — disposition pending electrical test. At +2 mTorr, impact is subtle but meaningful given CHA has accumulated multiple faults in this lot.
+
+ROOT CAUSE RECORDED IN NCR:
+Minor pressure elevation of +2 mTorr — within the range of early-stage VAT valve wear or APC calibration drift. RF gen hrs: 1241.73. PM: 43 wafers (OVERDUE.).
+
+CORRECTIVE ACTION:
+Logged for monitoring. APC calibration at next PM window.
+
+NCR STATUS: OPEN | SEVERITY: LOW","CHAMBER CHA DEFECT HISTORY:
+
+Prior faults: TCP +50; RF +10; TCP +10; Pr -2; He Chuck; TCP +30; RF +8. Pressure recurring. RF gen hrs: 1241.73. PM: 43 wafers — OVERDUE.","INSPECTION FINDINGS:
+
+Result: PENDING — metrology not collected. Minor pressure deviation. Endpoint peak 2927. Mild quality impact expected. Electrical test will determine final disposition.","SPC FINDINGS:
+
+Parameter: pressure. Rule: Rule 3 (6 consecutive trend). Alert: YELLOW. Occurrence #3. Pressure trending upward across multiple wafers. Action: MONITOR. APC calibration scheduled.",No customer complaint raised.,5
+"NON-CONFORMANCE REPORT | Wafer 3143 | LOT_31B | CHB | 2024-03-25 | Recipe: METAL_ETCH_A_V3 | Operator: OP_PATEL | WO: WO-CHB-3143
+
+FAULT: TCP -20 — TCP Top Power deviated -20W below set-point.
+
+WHAT WAS OBSERVED AT RUN TIME:
+Endpoint peak: 2661 counts. Endpoint mean: 1749.5. Note: for a TCP under-power fault the endpoint signal is typically suppressed or delayed, consistent with insufficient plasma density to complete the etch. Pressure mean: 1190.2 mTorr. RF phase std: 791.2. Operator note: None recorded.
+
+METROLOGY:
+Etch rate: 427.4 Å/min (-34.6 vs baseline 462). A negative deviation here is expected — less TCP power means less plasma density and slower etch. CD bias: 18.64 nm (positive CD bias consistent with under-etch). Uniformity: 15.52%. Pass/Fail: FAIL. OEE: 0.0000.
+
+DEFECTS IDENTIFIED:
+Under-etch confirmed. Resist residue visible on sampled die. CD bias shifted positive, consistent with insufficient plasma density for complete layer removal. Etch stop suspected on two die locations. The combination of low etch rate and positive CD bias is the diagnostic signature of TCP under-power.
+
+ROOT CAUSE RECORDED IN NCR:
+TCP generator under-power of -20W. Step-change onset (no prior SPC drift on this parameter) points to an acute hardware event rather than gradual degradation: (1) partial power supply fault in TCP generator; (2) thermal protection limit triggered — generator reduced output to protect itself; (3) cooling system fault on generator. RF generator hours: 988.47 hrs. PM count: 43 (OVERDUE — maintenance risk elevated.).
+
+CORRECTIVE ACTION:
+Lot held. TCP generator thermal log reviewed. Cooling system inspected. Generator event log checked for trip codes. WO raised: WO-CHB-3143.
+
+NCR STATUS: OPEN | SEVERITY: HIGH","CHAMBER CHB DEFECT HISTORY AT TIME OF THIS FAULT:
+
+Prior faults on CHB: RF -12; Pr +3; BCl3 +5; Cl2 -5; Cl2 +5; BCl3 -5. RF generator hours: 988.47 hrs. PM OVERDUE: 43 wafers. Open WO: WO-CHB-3143.","INSPECTION FINDINGS:
+
+Result: FAIL. Etch rate: 427.4 Å/min (-34.6 vs baseline). Under-etch confirmed — etch rate below baseline by 34.6 Å/min. CD bias: +18.64 nm (positive bias = under-etch signature). Uniformity: 15.52%. Resist residue detected. SEM review: REQUIRED.","SPC FINDINGS:
+
+Parameter: tcp_top_pwr. Rule violated: Nelson Rule 1 (1 point >3σ below LCL). Alert level: RED — low side violation. No prior tcp_top_pwr drift visible before this event — onset was sudden, consistent with acute hardware failure rather than gradual degradation. However, 3 prior tcp_top_pwr alerts exist in the run history — this chamber's TCP system has a documented instability pattern. Action taken: INVESTIGATE. Generator event log reviewed.","CUSTOMER COMPLAINT RAISED:
+
+Under-etch confirmed by customer at incoming inspection. Resist residue on affected die. Customer requested corrective action and hold on further shipments from this chamber.",2
+"NON-CONFORMANCE REPORT | Wafer 3318 | LOT_33B | CHB | 2024-04-15 | Recipe: METAL_ETCH_B_V2 | Operator: OP_SMITH | WO: WO-CHB-3318
+
+FAULT: TCP -15 — TCP Top Power deviated -15W below set-point.
+
+WHAT WAS OBSERVED AT RUN TIME:
+Endpoint peak severely suppressed at 851 counts against normal mean of ~1,879. This 55% reduction in endpoint signal is consistent with insufficient plasma density to complete the etch process. Endpoint mean: 578.4. Pressure mean: 1231.0 mTorr.  Operator note: Chamber flagged. QC review needed.
+
+METROLOGY:
+Etch rate: 289.7 Å/min. This is 172.3 Å/min (37%) below the baseline mean of 462 Å/min — the most severe etch rate reduction recorded in this production dataset. CD bias: -0.55 nm. Uniformity: 14.42%. Pass/Fail: FAIL. OEE: 0.0000.
+
+DEFECTS IDENTIFIED:
+Severe under-etch. Insufficient plasma density for layer removal. Low endpoint signal confirms etch did not reach completion. Possible etch stop. Resist residue expected on majority of die. This wafer is almost certainly a scrap.
+
+ROOT CAUSE RECORDED IN NCR:
+TCP generator under-power -15W. The recipe reload event during the run suggests the generator may have tripped and the operator attempted to recover by reloading the recipe. If confirmed, the trip itself is the root cause: (1) thermal protection event in TCP generator; (2) power supply fault; (3) interlock partial trip. This is the FIFTH tcp_top_pwr violation in the overall production run history — TCP generator requires full engineering review and likely replacement.
+
+CORRECTIVE ACTION:
+Lot held. Generator event log reviewed for trip codes. Cooling system and power supply inspected. WO: WO-CHB-3318.
+
+NCR STATUS: OPEN | SEVERITY: HIGH","CHAMBER CHB DEFECT HISTORY AT TIME OF THIS FAULT:
+
+Prior faults on CHB: RF -12; Pr +3; BCl3 +5; Cl2 -5; Cl2 +5; BCl3 -5; TCP -20. CRITICAL PATTERN: tcp_top_pwr has now violated SPC limits in BOTH directions (over-power and under-power) across multiple lots. This bidirectional instability is a defining characteristic of TCP generator end-of-life.  RF generator hours: 989.02 hrs. PM status: 62 wafers since last PM — SEVERELY OVERDUE. This is a significant maintenance risk. Open WO: WO-CHB-3318.","INSPECTION FINDINGS:
+
+Result: FAIL. Etch rate: 289.7 Å/min — 37% below baseline. This is the lowest etch rate recorded for a TCP fault in this dataset. CD bias: -0.55 nm. Uniformity: 14.42%. Endpoint peak 851 is severely suppressed. Under-etch confirmed. Probable scrap. SEM: REQUIRED.","SPC FINDINGS:
+
+Parameter: tcp_top_pwr. Rule violated: Nelson Rule 1 (1 point >3σ below LCL). Alert level: RED. This is the 5th tcp_top_pwr SPC violation across the full run history. Previous violations occurred on: LOT_29B (TCP +50, +10), LOT_31B (TCP +30, -20). The sustained pattern of tcp_top_pwr violations across multiple lots and both directions constitutes a systemic equipment failure. Escalation to equipment engineering is overdue. Action: HOLD LOT. TCP generator maintenance required before next production run.","CUSTOMER COMPLAINT RAISED:
+
+Under-etch confirmed at customer incoming inspection. Formal complaint filed.",1
+"NON-CONFORMANCE REPORT | Wafer 3319 | LOT_33B | CHA | 2024-04-15 | Recipe: METAL_ETCH_B_V2 | Operator: OP_CHEN
+
+FAULT: Cl2 -10 — Cl2 Flow deviated -10 sccm below set-point.
+
+WHAT WAS OBSERVED AT RUN TIME:
+Endpoint peak: 925 — severely suppressed. Endpoint mean: 636.5. Pressure: 1228.7 mTorr. RECIPE_RELOAD event (67 sec) — operator attempted mid-run recovery. Operator note: Endpoint signal low. Possible process issue.
+
+METROLOGY:
+Etch rate: 265.9 Å/min — 42% below baseline. The most severe Cl2-related etch rate reduction in this dataset. CD bias: 3.16 nm. Uniformity: 15.33%. Pass/Fail: FAIL. OEE: 0.0000.
+
+DEFECTS IDENTIFIED:
+Severe under-etch. Aluminium residue on all sampled contact structures. Incomplete native oxide removal. Etch stop confirmed on 100% of sampled die. This wafer is a scrap. The recipe reload during run suggests the operator recognised the process had failed but was unable to recover.
+
+ROOT CAUSE RECORDED IN NCR:
+Cl2 MFC near-complete failure — -10 sccm is twice the prior Cl2 -5 event magnitude. MFC is in active failure mode. Either: (1) complete valve blockage; (2) supply cylinder empty — supply management process failure; (3) regulator failure cutting supply pressure to zero. RF gen hrs: 1242.31. PM: 63 wafers — SEVERELY OVERDUE.
+
+CORRECTIVE ACTION:
+Cl2 MFC replaced. Supply cylinder checked. Production suspended until root cause confirmed. Wafer scrapped.
+
+NCR STATUS: OPEN | SEVERITY: HIGH","CHAMBER CHA DEFECT HISTORY:
+
+Prior faults: TCP +50; RF +10; TCP +10; Pr -2; He Chuck; TCP +30; RF +8; Pr +2. RF gen hrs: 1242.31. PM: 63 wafers — SEVERELY OVERDUE.","INSPECTION FINDINGS:
+
+Result: FAIL. Etch rate 265.9 Å/min — 42% below baseline. Worst Cl2-related etch rate in dataset. CD bias 3.16 nm. Uniformity 15.33%. Complete etch failure. Scrap.","SPC FINDINGS:
+
+Parameter: cl2_flow. Rule: Rule 1 (>3σ below LCL). Alert: RED. Occurrence #3. MFC hardware failure — not process variation. Action: HOLD. Replace Cl2 MFC immediately.",No customer complaint raised. Lot held.,1
+"NON-CONFORMANCE REPORT | Wafer 3320 | LOT_33B | CHB | 2024-04-15 | Recipe: METAL_ETCH_B_V2 | Operator: OP_PATEL | WO: WO-CHB-3320
+
+FAULT: RF -12 — RF Bottom Power deviated -12W below set-point.
+
+WHAT WAS OBSERVED AT RUN TIME:
+Endpoint peak: 917. Endpoint mean: 622.1. Pressure: 1231.3 mTorr. RF phase std: 873.6. Operator note: Chamber flagged. QC review needed.
+
+METROLOGY:
+Etch rate: not collected — lot held before metrology. CD bias: not collected. Uniformity: not collected. Pass/Fail: PENDING.. OEE: 0.0000.
+
+DEFECTS IDENTIFIED:
+Under-etch. Reduced RF bias means less ion energy at wafer surface, resulting in insufficient directionality for anisotropic etch. Notching on sidewall features expected. Sidewall bowing and positive CD bias consistent with under-powered RF bias.
+
+ROOT CAUSE RECORDED IN NCR:
+RF bias -12W loss. Most likely: (1) degraded RF cable introducing impedance mismatch — generator delivers less power than commanded; (2) RF matching network component failure; (3) RF power meter calibration error masking the true delivery shortfall. Sudden onset with no prior SPC drift points to hardware fault. RF gen hrs: 989.05. PM: 63 wafers.
+
+CORRECTIVE ACTION:
+RF cable inspected. Matching network calibrated. Power meter verified. WO: WO-CHB-3320.
+
+NCR STATUS: OPEN | SEVERITY: HIGH","CHAMBER CHB DEFECT HISTORY:
+
+Prior faults: RF -12; Pr +3; BCl3 +5; Cl2 -5; Cl2 +5; BCl3 -5; TCP -20; TCP -15. RF RECURRING on this chamber.  RF gen hrs: 989.05. PM: 63 wafers — OVERDUE. Open WO: WO-CHB-3320.","INSPECTION FINDINGS:
+
+Result: PENDING — metrology not collected. Etch rate: not collected. Under-etch and notching expected based on RF -12W deviation. Endpoint peak 917. SEM: REQUIRED.","SPC FINDINGS:
+
+Parameter: rf_pwr. Rule violated: Rule 1 (>3σ below LCL). Alert: RED. Low-side violation — RF power loss. Occurrence #4 of rf_pwr violations in run history. Sudden onset (no prior drift) consistent with hardware fault. Action: INVESTIGATE.","CUSTOMER COMPLAINT RAISED:
+
+Under-etch and notching confirmed at incoming. Customer requested containment and RCA.",1
+"NON-CONFORMANCE REPORT | Wafer 3339 | LOT_33B | CHA | 2024-04-15 | Recipe: METAL_ETCH_B_V2 | Operator: OP_NGUYEN
+
+FAULT: BCl3 +10 — BCl3 Flow deviated +10 sccm above set-point.
+
+WHAT WAS OBSERVED AT RUN TIME:
+Endpoint peak: 837 — severely suppressed (normal ~1,879). No clear endpoint trigger detected. Endpoint mean: 596.4. Pressure mean: 1234.7 mTorr. RF phase std: 986.4. Operator note: Operator noticed instability. Reported.
+
+METROLOGY:
+Etch rate: not collected — etch did not complete due to severe passivation. CD bias: not collected. Uniformity: not collected. Pass/Fail: PENDING — wafer held. OEE: 0.0000.
+
+DEFECTS IDENTIFIED:
+Catastrophic passivation layer formation at +10 sccm BCl3 over-delivery. Etch process was completely suppressed — the layer was not etched through. No endpoint trigger recorded. Surface opaque under optical inspection. Passivation layer estimated at 3–5x normal thickness by reflectometry. Wafer is an unconditional scrap.
+
+ROOT CAUSE RECORDED IN NCR:
+BCl3 MFC catastrophic over-delivery at +10 sccm — twice the magnitude of the prior BCl3 +5 event. MFC valve is stuck partially open or has completely failed. This is the third BCl3 MFC event in the run history (BCl3 +5 on LOT_29B, BCl3 -5 on LOT_31B, BCl3 +10 here). The escalating severity and alternating direction are definitive indicators of MFC end-of-life. RF gen hrs: 1242.34. PM: 64 wafers — SEVERELY OVERDUE.
+
+CORRECTIVE ACTION:
+BCl3 MFC replaced immediately. Full gas delivery verification after replacement. Wafer scrapped. Production suspended on CHA until verified.
+
+NCR STATUS: OPEN | SEVERITY: HIGH","CHAMBER CHA DEFECT HISTORY:
+
+Prior faults on CHA: TCP +50; RF +10; TCP +10; Pr -2; He Chuck; TCP +30; RF +8; Pr +2; Cl2 -10.  RF gen hrs: 1242.34. PM: 64 wafers — SEVERELY OVERDUE.","INSPECTION FINDINGS:
+
+Result: FAIL — etch did not complete. Metrology not collectible. Endpoint peak 837 severely suppressed — no etch completion signal. Passivation layer visually confirmed on wafer surface. Scrap disposition confirmed.","SPC FINDINGS:
+
+Parameter: bcl3_flow. Rule violated: Rule 1 (far above UCL — +10 sccm on 0.5 sccm std = 20σ). Alert: RED. Occurrence #3 in run history. This is an MFC hardware failure, not process variation. Action: HOLD. Replace BCl3 MFC immediately.","CUSTOMER COMPLAINT RAISED:
+
+Heavy passivation confirmed at customer inspection.",1
+"NON-CONFORMANCE REPORT | Wafer 3340 | LOT_33B | CHB | 2024-04-15 | Recipe: METAL_ETCH_B_V2 | Operator: OP_SMITH
+
+FAULT: Pr +1 — Chamber Pressure deviated +1 mTorr above set-point.
+
+WHAT WAS OBSERVED AT RUN TIME:
+Endpoint peak: 888. Endpoint mean: 600.8. Pressure mean: 1232.2 mTorr. Operator note: None.
+
+METROLOGY:
+Etch rate: 259.9 Å/min (-202.1 vs baseline). Note: this etch rate is severely below baseline — however, in the context of this lot (LOT_33B with TCP -15, Cl2 -10, RF -12, BCl3 +10 also present), the etch rate depression may reflect multiple concurrent process failures rather than the pressure deviation alone. CD bias: 2.17 nm. Uniformity: 15.55%. Pass/Fail: FAIL. OEE: 0.0000.
+
+DEFECTS IDENTIFIED:
+Minor pressure elevation. Mild uniformity degradation recorded. This fault is LOW severity in isolation, but occurs in a lot with multiple concurrent high-severity faults, complicating root cause attribution.
+
+ROOT CAUSE RECORDED IN NCR:
+Minor APC pressure elevation of +1 mTorr. Within range of normal APC hunting. Not a primary root cause but logged as a contributing factor to the lot's overall quality failure. PM: 64 wafers — OVERDUE.
+
+CORRECTIVE ACTION:
+Logged. APC calibration at next PM. No stand-alone corrective action required.
+
+NCR STATUS: OPEN | SEVERITY: LOW","CHAMBER CHB DEFECT HISTORY:
+
+Prior faults on CHB: RF -12; Pr +3; BCl3 +5; Cl2 -5; Cl2 +5; BCl3 -5; TCP -20; TCP -15; RF -12. Multiple pressure events on this chamber. APC stability concern. RF gen hrs: 989.08. PM: 64 wafers — OVERDUE.","INSPECTION FINDINGS:
+
+Result: FAIL (likely attributable to concurrent lot-level failures rather than pressure alone). Etch rate 259.9 Å/min — severely below baseline, but this lot has 5 concurrent fault events. CD bias 2.17 nm. Uniformity 15.55%.","SPC FINDINGS:
+
+Parameter: pressure. Rule: Rule 3 (trend). Alert: YELLOW. Occurrence #4 of pressure violations in run history. In context of LOT_33B, pressure trend is a secondary signal. Primary concern is TCP, Cl2, RF, and BCl3 concurrent failures. Action: MONITOR.",No customer complaint raised.,4
+"NON-CONFORMANCE REPORT | Wafer 3341 | LOT_33B | CHA | 2024-04-15 | Recipe: METAL_ETCH_B_V2 | Operator: OP_CHEN | WO: WO-CHA-3341
+
+FAULT: TCP +20 — TCP Top Power deviated +20W above set-point.
+
+WHAT WAS OBSERVED AT RUN TIME:
+Endpoint peak: 989. Endpoint mean: 679.5. Pressure mean: 1231.9 mTorr. RF phase std: 1244.8. Operator note: Recipe completed but something looked off.
+
+METROLOGY:
+Etch rate: 285.2 Å/min (-176.8 vs baseline). NOTABLE: etch rate is BELOW baseline despite TCP over-power — this paradox suggests the excess TCP power is disrupting plasma chemistry rather than simply accelerating etch. CD bias: -1.68 nm. Uniformity: 14.92%. Pass/Fail: FAIL. OEE: 0.0000.
+
+DEFECTS IDENTIFIED:
+Over-etch on metal layer. Non-uniformity of 14.92% above 10% target. CD narrowing. The below-nominal etch rate despite high TCP power is anomalous and may indicate the impedance matching network is severely mismatched, causing most of the excess TCP power to be reflected rather than delivered to the plasma.
+
+ROOT CAUSE RECORDED IN NCR:
+TCP impedance matching fault causing generator to over-compensate. This is the sixth tcp_top_pwr event in the full run history. The generator's inability to maintain stable output confirms end-of-life equipment behaviour. RF generator hours: 1242.36 hrs. PM count: 65 — SEVERELY OVERDUE.
+
+CORRECTIVE ACTION:
+Lot held. TCP impedance matching network inspected. WO: WO-CHA-3341. Engineering escalation raised.
+
+NCR STATUS: OPEN | SEVERITY: HIGH","CHAMBER CHA DEFECT HISTORY AT TIME OF THIS FAULT:
+
+Prior faults on CHA: TCP +50; RF +10; TCP +10; Pr -2; He Chuck; TCP +30; RF +8; Pr +2; Cl2 -10; BCl3 +10. ESCALATING TCP PATTERN: TCP power events are now appearing in both directions and increasing in frequency. This is equipment failure, not process drift.  RF gen hrs: 1242.36. PM: 65 wafers — OVERDUE. Open WO: WO-CHA-3341.","INSPECTION FINDINGS:
+
+Result: FAIL. Etch rate 285.2 Å/min (-176.8 vs baseline). Paradoxically below baseline despite TCP over-power — impedance mismatch suspected. CD bias: -1.68 nm. Uniformity: 14.92%. Endpoint peak 989. SEM: REQUIRED.","SPC FINDINGS:
+
+Parameter: tcp_top_pwr. Rule violated: Nelson Rule 1 (>3σ above UCL). Alert level: RED. This is occurrence #6 of a tcp_top_pwr violation. The cumulative SPC history for tcp_top_pwr now shows violations in both directions across three different lots. This is a systemic equipment failure pattern. Immediate TCP generator replacement or full overhaul is required. Action: ESCALATE to equipment engineering.",No customer complaint raised. Lot held internally.,1

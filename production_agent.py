@@ -27,6 +27,8 @@ from openai import AzureOpenAI
 from datetime import datetime
 from dotenv import load_dotenv
 from pathlib import Path
+from quality_agent import build_index, run_quality_agent
+from openai import OpenAI
 
 print("Imports successful.")
 
@@ -68,12 +70,19 @@ client = AzureOpenAI(
 
 print(f"Azure OpenAI client ready.")
 
+# ── Quality Agent initialisation ──────────────────────────────────────────────
+# Build the vector index once at startup — stays in memory for the full run.
+# The quality_agent.py file must be in the same directory as this script.
+QUALITY_RECORDS_PATH = "data/quality_records.csv"
+quality_store  = build_index(QUALITY_RECORDS_PATH)
+quality_client = AzureOpenAI(api_key=os.getenv("AZURE_API_KEY"), azure_endpoint=os.getenv("AZURE_ENDPOINT"), api_version=os.getenv("AZURE_API_VERSION"))
+print("Quality Agent vector store ready.")
+
 # ## Cell 4 — Load and prepare data
 
 DATA_PATH = "data/train_machine.csv"
 
 data = pd.read_csv(DATA_PATH)
-
 def to_snake_case(name):
     return name.strip().lower().replace(' ', '_')
 
@@ -83,6 +92,11 @@ ID_COLS     = ["wafer_id", "experiment", "step", "time_sec", "step_number"]
 sensor_cols = [c for c in data.columns if c not in ID_COLS]
 
 print(f"Data loaded  : {data.shape[0]} rows, {data.shape[1]} columns")
+
+# Build wafer → lot_id / chamber_id lookup from summary file.
+# Used to enrich fault alerts before passing them to the Quality Agent.
+_summary = pd.read_csv("data/train_summary.csv")
+WAFER_LOOKUP = _summary.set_index("wafer_id")[["lot_id","chamber_id"]].to_dict("index")
 print(f"Wafers       : {data['wafer_id'].nunique()}")
 print(f"Sensors      : {len(sensor_cols)}")
 print(f"\nAvailable sensor names:")
@@ -326,6 +340,82 @@ def get_llm_explanation(event_type, sensor, details):
 
 print("LLM explanation function ready.")
 
+
+def _severity(value, rng):
+    """
+    Derive severity from how far outside the threshold the value is,
+    expressed as a fraction of the allowed range.
+    """
+    allowed = rng["max"] - rng["min"]
+    if allowed == 0:
+        return "HIGH"
+    overshoot = max(value - rng["max"], rng["min"] - value, 0)
+    frac = overshoot / allowed
+    if frac >= 0.20:  return "CRITICAL"
+    if frac >= 0.10:  return "HIGH"
+    if frac >= 0.04:  return "MEDIUM"
+    return "LOW"
+
+
+def normalize_alert(raw, alert_type):
+    """
+    Convert a raw anomaly or trend dict from the Production Agent into
+    the standard alert format the Quality Agent expects.
+
+    This is the handoff contract between Agent 1 and Agent 2.
+    One call = one fault event.
+    """
+    wafer_id = raw["wafer_id"]
+    sensor   = raw["sensor"]
+    rng      = {"min": raw["threshold_min"], "max": raw["threshold_max"]}
+
+    # Look up lot and chamber from the summary data
+    meta     = WAFER_LOOKUP.get(wafer_id, {})
+    lot_id   = meta.get("lot_id",   "UNKNOWN")
+    chamber  = meta.get("chamber_id","UNKNOWN")
+
+    if alert_type == "ANOMALY":
+        value    = raw["value"]
+        sign     = "+" if value > rng["max"] else "-"
+        delta    = abs(value - (rng["max"] if value > rng["max"] else rng["min"]))
+        dev_str  = f"{sign}{delta:.2f} outside threshold"
+        return {
+            "alert_type"   : "ANOMALY",
+            "wafer_id"     : wafer_id,
+            "lot_id"       : lot_id,
+            "chamber_id"   : chamber,
+            "sensor"       : sensor,
+            "value"        : value,
+            "threshold_min": rng["min"],
+            "threshold_max": rng["max"],
+            "deviation"    : dev_str,
+            "severity"     : _severity(value, rng),
+            "step"         : raw["step"],
+            "time_to_breach": None,
+            "explanation"  : raw["explanation"],
+        }
+    else:  # TREND
+        return {
+            "alert_type"   : "TREND",
+            "wafer_id"     : wafer_id,
+            "lot_id"       : lot_id,
+            "chamber_id"   : chamber,
+            "sensor"       : sensor,
+            "value"        : raw["current_value"],
+            "threshold_min": rng["min"],
+            "threshold_max": rng["max"],
+            "deviation"    : (f"trending {raw['trend_direction']} toward "
+                           f"{'upper' if raw['trend_direction'] == 'increasing' else 'lower'} limit"),
+            "severity"     : "MEDIUM",   # trends are pre-fault by definition
+            "step"         : raw["step"],
+            "time_to_breach": raw["time_to_breach"],
+            "explanation"  : raw["explanation"],
+        }
+
+
+print("Monitoring function ready.")
+
+
 # ## Cell 8 — Main monitoring function
 # Scans every row. Python checks thresholds and trends precisely.
 # LLM explains findings. No false positives from LLM reasoning.
@@ -425,6 +515,18 @@ def run_agent(data, thresholds, trend_config, max_rows=None):
                 print(f"  Note      : {explanation}")
                 print(f"{'─' * 52}")
 
+                # ── Hand off to Quality Agent ─────────────────────────────
+                # Normalise this single anomaly into the standard alert format
+                # and pass it to the Quality Agent immediately.
+                # The Quality Agent processes one fault at a time.
+                alert = normalize_alert(anomaly, "ANOMALY")
+                quality_report = run_quality_agent(
+                    alert, quality_store, quality_client
+                )
+                print("\n[Quality Agent Report]\n")
+                print(quality_report)
+                print(f"{'─' * 52}")
+
             else:
                 # value is within range — update history for trend analysis
                 history[wafer_id][sensor].append(value)
@@ -492,6 +594,18 @@ def run_agent(data, thresholds, trend_config, max_rows=None):
                         print(f"  Note          : {explanation}")
                         print(f"{'─' * 52}")
 
+                        # ── Hand off to Quality Agent ─────────────────────
+                        # Normalise this single trend alert into the standard
+                        # format and pass it to the Quality Agent immediately.
+                        # The Quality Agent processes one fault at a time.
+                        alert = normalize_alert(trend_entry, "TREND")
+                        quality_report = run_quality_agent(
+                            alert, quality_store, quality_client
+                        )
+                        print("\n[Quality Agent Report]\n")
+                        print(quality_report)
+                        print(f"{'─' * 52}")
+
     # ── Final summary ─────────────────────────────────────────────────────────
     print()
     print("=" * 60)
@@ -525,8 +639,6 @@ def run_agent(data, thresholds, trend_config, max_rows=None):
     return anomaly_log, trend_log
 
 
-print("Monitoring function ready.")
-
 # ## Cell 9 — Run the agent
 # Set `max_rows=None` to scan the full dataset.
 # 
@@ -559,4 +671,3 @@ if trends:
         'current_value', 'trend_direction',
         'rate_per_step', 'r_squared', 'time_to_breach'
     ]].to_string(index=False))
-
