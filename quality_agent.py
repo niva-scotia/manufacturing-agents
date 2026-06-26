@@ -18,10 +18,10 @@ Vector database:
 import os
 import pandas as pd
 import chromadb
-from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
 from openai import AzureOpenAI
 from dotenv import load_dotenv
 from pathlib import Path
+from chromadb.api.types import EmbeddingFunction
 
 # Load .env
 load_dotenv(Path(__file__).parent / ".env")
@@ -31,56 +31,52 @@ load_dotenv(Path(__file__).parent / ".env")
 QUALITY_RECORDS_PATH = "data/quality_records.csv"
 CHROMA_DB_PATH       = "chroma_db"        # folder where ChromaDB saves vectors
 COLLECTION_NAME      = "quality_records"   # name of the collection inside ChromaDB
-EMBEDDING_MODEL      = "all-MiniLM-L6-v2" # HuggingFace model for embeddings
+EMBEDDING_MODEL      = "text-embedding-3-small" # HuggingFace model for embeddings
 TOP_K                = 5
 OPENAI_MODEL         = os.getenv("AZURE_DEPLOYMENT")
+
+class OpenAIEmbedder(EmbeddingFunction):
+    def __init__(self):
+        self._client = AzureOpenAI(
+            api_key        = os.getenv("EMBEDDING_MODEL_KEY"),
+            azure_endpoint = os.getenv("EMBEDDING_ENDPOINT"),
+            api_version    = os.getenv("AZURE_API_VERSION"),
+        )
+        self._model = EMBEDDING_MODEL
+
+    def __call__(self, input: list[str]) -> list[list[float]]:
+        if not input:
+            raise ValueError("Empty input passed to embedder")
+        response = self._client.embeddings.create(
+            input=input,
+            model=self._model
+        )
+        embeddings = [r.embedding for r in response.data]
+        if not embeddings:
+            raise ValueError(f"Azure returned empty embeddings for input: {input[:1]}")
+        return embeddings
+
 
 # ── ChromaDB vector store ─────────────────────────────────────────────────────
 
 def build_index(csv_path: str) -> chromadb.Collection:
-    """
-    Loads quality_records.csv, embeds each row using sentence-transformers,
-    and stores the vectors in a persistent ChromaDB collection.
 
-    If the collection already exists and has the same number of documents,
-    it skips re-embedding and reuses what is on disk — so this is fast
-    on every run after the first one.
+    embed_fn = OpenAIEmbedder()
 
-    Returns the ChromaDB collection, which is used directly for querying.
-    """
-
-    # SentenceTransformerEmbeddingFunction tells ChromaDB to use
-    # the HuggingFace model for all embedding operations.
-    # ChromaDB calls this automatically when you add or query documents —
-    # you never call the embedding model directly yourself.
-    embed_fn = SentenceTransformerEmbeddingFunction(
-        model_name=EMBEDDING_MODEL
-    )
-
-    # PersistentClient saves the vectors to disk at CHROMA_DB_PATH.
-    # On first run it creates the folder. On subsequent runs it loads
-    # the existing vectors from disk — no re-embedding needed.
     chroma_client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
 
-    # get_or_create_collection either loads the existing collection
-    # or creates a new empty one if it does not exist yet.
     collection = chroma_client.get_or_create_collection(
         name=COLLECTION_NAME,
         embedding_function=embed_fn,
-        metadata={"hnsw:space": "cosine"}  # use cosine similarity for search
+        metadata={"hnsw:space": "cosine"}
     )
 
-    # Load the quality records
     df = pd.read_csv(csv_path)
 
-    # If the collection already has the right number of documents,
-    # skip re-indexing — the vectors are already on disk.
     if collection.count() == len(df):
         print(f"[VectorStore] Loaded {collection.count()} existing documents from disk.")
         return collection
 
-    # Otherwise build from scratch.
-    # Delete any stale data first.
     chroma_client.delete_collection(COLLECTION_NAME)
     collection = chroma_client.get_or_create_collection(
         name=COLLECTION_NAME,
@@ -88,8 +84,6 @@ def build_index(csv_path: str) -> chromadb.Collection:
         metadata={"hnsw:space": "cosine"}
     )
 
-    # Build one text chunk per row — same as before.
-    # ChromaDB will call the embedding function on each chunk automatically.
     documents, ids = [], []
     for idx, row in df.iterrows():
         chunk = (
@@ -103,14 +97,10 @@ def build_index(csv_path: str) -> chromadb.Collection:
         documents.append(chunk)
         ids.append(f"case_{idx}")
 
-    # Add all documents to ChromaDB.
-    # ChromaDB calls the embedding function internally —
-    # it converts each chunk to a vector and stores both.
     collection.add(documents=documents, ids=ids)
     print(f"[VectorStore] Indexed {len(documents)} documents and saved to disk.")
-
+   
     return collection
-
 
 # ── Build retrieval query ─────────────────────────────────────────────────────
 
@@ -171,81 +161,39 @@ You are the Quality Intelligence Agent in a semiconductor manufacturing pipeline
 
 You receive:
   1. A Production Agent alert — a sensor that just exceeded its threshold
-  2. Retrieved quality history — the most relevant past cases from the quality
-     database, found by semantic similarity to the current alert
+  2. Retrieved NCR records — the most relevant past non-conformance reports
+     from the quality database, found by semantic similarity to the alert
 
-Your job is to write a structured report that the Maintenance Agent will read
-as its input context. The Maintenance Agent is the next agent in the pipeline.
-It will use your report — and only your report — to decide what to inspect
-and repair on the chamber.
+Your job is to extract and summarise the NCR evidence related to the sensor
+and tool that produced the anomaly. This summary will be passed to the
+Maintenance Agent as context.
 
-The Maintenance Agent is a technical expert. Be specific and direct.
-Do not explain basics. Do not pad.
+Be concise and factual. Only report what the retrieved NCRs actually say.
+Do not add interpretation, recommendations, or sections not supported by
+the evidence.
 
-Rules:
-- Every claim must be grounded in the retrieved evidence. Do not invent.
-- If retrieved cases involve a different sensor or chamber, say so and
-  reduce your confidence accordingly.
-- If the same failure has recurred, state how many times and what the
-  pattern shows — this is the most important signal for the Maintenance Agent.
-- Order the inspection checklist by probability of being the root cause,
-  not by ease of inspection.
-- Write the report so a maintenance engineer could read it in 30 seconds
-  and know exactly what to do.
+Output format:
 
-Write the report in this exact format — use the section headers as shown,
-fill in the content under each one:
+SENSOR: [sensor name]
+CHAMBER: [chamber ID]
+ALERT TYPE: [ANOMALY or TREND]
 
-QUALITY INTELLIGENCE REPORT
-============================
-Triggered by: [sensor] | [deviation] | [chamber] | [lot] | [severity]
+NCR SUMMARY:
+[For each relevant retrieved NCR, one short paragraph covering:
+ - what fault was recorded
+ - what the sensor deviation was
+ - what defects or quality impact were observed
+ - what root cause was recorded at the time
+ - whether this is a recurring pattern on this sensor or chamber]
 
-URGENCY: [CRITICAL / HIGH / MEDIUM / LOW]
-  Production: [STOP NOW / continue with monitoring]
-  Lot: [HOLD — do not release / release pending inspection]
-  Reason: [one sentence]
+TOOL WEAR INDICATORS:
+[Any evidence from the NCRs of tool wear, PM overdue status,
+ RF generator hours, or open work orders at the time of past faults.
+ If none recorded, state: None found in retrieved records.]
 
-ROOT CAUSE ASSESSMENT [confidence: HIGH / MEDIUM / LOW]
-  Primary cause: [one specific sentence naming the most likely root cause]
-  Confidence reasoning: [what evidence supports or limits this conclusion]
-  Secondary causes:
-    - [second most likely]
-    - [third most likely]
-  Ruled out:
-    - [considered but unlikely — one-line reason each]
-
-TOOL WEAR AND HISTORY
-  Recurring pattern: [YES / NO] — [description or 'first recorded occurrence']
-  Affected component: [specific hardware component]
-  PM status: [OVERDUE / CURRENT / UNKNOWN]
-  RF generator hours: [value or UNKNOWN]
-  Prior NCRs on this sensor: [number]
-  Prior NCRs on this chamber: [number]
-
-QUALITY IMPACT
-  SPC: [alert level] — [which Nelson rule was violated]
-  Typical defects: [list]
-  Etch rate impact: [quantified if available]
-  Customer complaint history: [YES with impact summary / NO]
-
-INSPECTION CHECKLIST (ordered by root cause probability)
-  1. Component: [exact component name]
-     Action: [specific test or inspection to perform]
-     Expected finding: [what a positive result looks like]
-     Evidence basis: [which retrieved case supports this check]
-
-  2. Component: [...]
-     Action: [...]
-     Expected finding: [...]
-     Evidence basis: [...]
-
-  [continue for all checklist items]
-
-EVIDENCE SUMMARY
-  Cases retrieved: [number]
-  Best match similarity: [score]
-  Evidence quality: [STRONG / MODERATE / WEAK]
-  Caveat: [any limitation — e.g. small history, different chamber]
+RECURRENCE:
+[How many times has this sensor or a related fault appeared in the
+ retrieved records. State the pattern if one exists.]
 """.strip()
 
 
@@ -327,15 +275,13 @@ def run_quality_agent(alert: dict,
 
     print(f"[Quality Agent] Retrieved {len(retrieved)} cases. "
           f"Best similarity: {retrieved[0]['similarity']:.4f}")
-    
-    retrieved = retrieve_cases(collection, query, top_k=TOP_K)
 
     # Add this block to see the retrieved cases
-    print("\n[Quality Agent] Top 5 retrieved cases:")
-    for case in retrieved:
-        print(f"\n--- Rank {case['rank']} | Similarity: {case['similarity']} ---")
-        print(case['content'][:500])  # first 500 characters of each case
-        print("...")  
+    #print("\n[Quality Agent] Top 5 retrieved cases:")
+    #for case in retrieved:
+     #   print(f"\n--- Rank {case['rank']} | Similarity: {case['similarity']} ---")
+      #  print(case['content'][:500])  # first 500 characters of each case
+       # print("...")  
 
         
     return synthesise_report(alert, retrieved, client)
