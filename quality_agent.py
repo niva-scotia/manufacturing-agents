@@ -277,11 +277,11 @@ def run_quality_agent(alert: dict,
           f"Best similarity: {retrieved[0]['similarity']:.4f}")
 
     # Add this block to see the retrieved cases
-    print("\n[Quality Agent] Top 5 retrieved cases:")
-    for case in retrieved:
-        print(f"\n--- Rank {case['rank']} | Similarity: {case['similarity']} ---")
-        print(case['content'][:500])  # first 500 characters of each case
-        print("...")  
+    #print("\n[Quality Agent] Top 5 retrieved cases:")
+    #for case in retrieved:
+        #print(f"\n--- Rank {case['rank']} | Similarity: {case['similarity']} ---")
+        #print(case['content'][:500])  # first 500 characters of each case
+        #print("...")  
 
         
     return synthesise_report(alert, retrieved, client)
