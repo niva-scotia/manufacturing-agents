@@ -1,0 +1,7 @@
+chamber_id,pm_type,pm_interval_wafers,pm_interval_rf_hrs,last_pm_date,last_pm_rf_hrs,wafers_since_last_pm,current_rf_hrs,wafers_until_pm,rf_hrs_until_pm,pm_status,technician_assigned,pm_notes
+CHA,WET_CLEAN,35,N/A,2024-02-10,991.73,43,1241.73,-8,N/A,OVERDUE,TECH_YAMAMOTO,Wet clean OVERDUE by 8 wafers. Last event WO-CHA-2750 showed TCP coil arcing attributed to overdue wet clean polymer accumulation. Strict 35-wafer interval enforcement required.
+CHA,FULL_PM,250,500,2024-02-10,991.73,43,1241.73,207,250.0,CURRENT,TECH_YAMAMOTO,Full PM on schedule. 207 wafers and 250.0 RF hrs remaining. Next Full PM should include comprehensive TCP generator inspection given WO-CHA-2915/2936/3120/3341 recurrence pattern.
+CHA,ELECTRODE_CHANGE,150,N/A,2024-01-20,N/A,43,1241.73,107,N/A,CURRENT,TECH_CHEN,Electrode change on schedule. 107 wafers remaining until next electrode change.
+CHB,WET_CLEAN,35,N/A,2024-04-01,N/A,28,1189.5,7,N/A,CURRENT,TECH_PARK,Wet clean current. 7 wafers remaining before next wet clean due.
+CHB,FULL_PM,250,500,2024-03-15,989.5,28,1189.5,222,300.0,CURRENT,TECH_PARK,Full PM current. 222 wafers and 300.0 RF hrs remaining.
+CHB,ELECTRODE_CHANGE,150,N/A,2024-03-10,N/A,28,1189.5,122,N/A,CURRENT,TECH_CHEN,Electrode change current. 122 wafers remaining.

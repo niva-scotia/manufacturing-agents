@@ -28,6 +28,11 @@ from datetime import datetime
 from dotenv import load_dotenv
 from pathlib import Path
 from quality_agent import build_index, run_quality_agent
+from maintenance_agent import (
+    build_index as build_wo_index,
+    run_maintenance_agent,
+    print_recommendation,
+)
 from openai import OpenAI
 
 print("Imports successful.")
@@ -77,6 +82,22 @@ QUALITY_RECORDS_PATH = "data/quality_records.csv"
 quality_store  = build_index(QUALITY_RECORDS_PATH)
 quality_client = AzureOpenAI(api_key=os.getenv("AZURE_API_KEY"), azure_endpoint=os.getenv("AZURE_ENDPOINT"), api_version=os.getenv("AZURE_API_VERSION"))
 print("Quality Agent vector store ready.")
+
+# ── Maintenance Agent initialisation ──────────────────────────────────────────
+# Build the work-order vector index once at startup, and load the three CMMS
+# lookup tables (PM schedule, spare parts, calibration) into memory.
+# The maintenance_agent.py file must be in the same directory as this script.
+CMMS_WO_PATH    = "data/cmms_work_orders.csv"
+CMMS_PM_PATH    = "data/cmms_pm_schedule.csv"
+CMMS_PARTS_PATH = "data/cmms_spare_parts.csv"
+CMMS_CALIB_PATH = "data/cmms_calibration.csv"
+
+wo_store           = build_wo_index(CMMS_WO_PATH)
+pm_df              = pd.read_csv(CMMS_PM_PATH)
+parts_df           = pd.read_csv(CMMS_PARTS_PATH)
+calib_df           = pd.read_csv(CMMS_CALIB_PATH)
+maintenance_client = AzureOpenAI(api_key=os.getenv("AZURE_API_KEY"), azure_endpoint=os.getenv("AZURE_ENDPOINT"), api_version=os.getenv("AZURE_API_VERSION"))
+print("Maintenance Agent vector store ready.")
 
 # ## Cell 4 — Load and prepare data
 
@@ -527,6 +548,16 @@ def run_agent(data, thresholds, trend_config, max_rows=None):
                 print(quality_report)
                 print(f"{'─' * 52}")
 
+                # ── Hand off to Maintenance Agent ─────────────────────────
+                # The Quality Agent report becomes the Maintenance Agent's
+                # input. It adds CMMS context (PM, parts, calibration) and a
+                # prioritised recommendation.
+                recommendation = run_maintenance_agent(
+                    quality_report, wo_store, pm_df, parts_df,
+                    calib_df, maintenance_client
+                )
+                print_recommendation(recommendation)
+
             else:
                 # value is within range — update history for trend analysis
                 history[wafer_id][sensor].append(value)
@@ -605,6 +636,16 @@ def run_agent(data, thresholds, trend_config, max_rows=None):
                         print("\n[Quality Agent Report]\n")
                         print(quality_report)
                         print(f"{'─' * 52}")
+
+                        # ── Hand off to Maintenance Agent ─────────────────
+                        # The Quality Agent report becomes the Maintenance
+                        # Agent's input. It adds CMMS context (PM, parts,
+                        # calibration) and a prioritised recommendation.
+                        recommendation = run_maintenance_agent(
+                            quality_report, wo_store, pm_df, parts_df,
+                            calib_df, maintenance_client
+                        )
+                        print_recommendation(recommendation)
 
     # ── Final summary ─────────────────────────────────────────────────────────
     print()
