@@ -116,7 +116,7 @@ def build_query(alert: dict) -> str:
         f"Deviation: {alert.get('deviation', '')}. "
         f"Chamber: {chamber}. Lot: {alert.get('lot_id', 'unknown')}. "
         f"Severity: {alert.get('severity', 'unknown')}. "
-        f"{alert.get('explanation', '')} "
+        #f"{alert.get('explanation', '')} " remove explanation from query; make retrieval happen based on sensor, wafer, chamber and lot
         f"Looking for NCR reports, SPC violations, inspection failures, "
         f"and customer complaints related to {alert['sensor']} on {chamber}. "
         f"Root cause and tool wear history."
@@ -231,11 +231,11 @@ def synthesise_report(alert: dict,
         f"Step          : {alert.get('step', 'N/A')}\n"
         f"Severity      : {alert.get('severity', 'unknown')}\n"
         + (f"Time to breach: {ttb}\n" if atype == "TREND" else "")
-        + f"Explanation   : {alert.get('explanation', 'Not provided.')}\n\n"
-        f"{'='*60}\n\n"
-        f"RETRIEVED QUALITY HISTORY "
-        f"({len(retrieved)} most relevant past cases):\n\n"
-        f"{cases_block}"
+        #+ f"Explanation   : {alert.get('explanation', 'Not provided.')}\n\n" 
+        + f"{'='*60}\n\n"
+        + f"RETRIEVED QUALITY HISTORY "
+        + f"({len(retrieved)} most relevant past cases):\n\n"
+        + f"{cases_block}"
     )
 
     response = client.chat.completions.create(
@@ -277,11 +277,11 @@ def run_quality_agent(alert: dict,
           f"Best similarity: {retrieved[0]['similarity']:.4f}")
 
     # Add this block to see the retrieved cases
-    #print("\n[Quality Agent] Top 5 retrieved cases:")
-    #for case in retrieved:
-     #   print(f"\n--- Rank {case['rank']} | Similarity: {case['similarity']} ---")
-      #  print(case['content'][:500])  # first 500 characters of each case
-       # print("...")  
+    print("\n[Quality Agent] Top 5 retrieved cases:")
+    for case in retrieved:
+        print(f"\n--- Rank {case['rank']} | Similarity: {case['similarity']} ---")
+        print(case['content'][:500])  # first 500 characters of each case
+        print("...")  
 
         
     return synthesise_report(alert, retrieved, client)

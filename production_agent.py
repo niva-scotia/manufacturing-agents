@@ -391,8 +391,8 @@ def normalize_alert(raw, alert_type):
             "deviation"    : dev_str,
             "severity"     : _severity(value, rng),
             "step"         : raw["step"],
-            "time_to_breach": None,
-            "explanation"  : raw["explanation"],
+            "time_to_breach": None
+            #"explanation"  : raw["explanation"],
         }
     else:  # TREND
         return {
@@ -408,8 +408,8 @@ def normalize_alert(raw, alert_type):
                            f"{'upper' if raw['trend_direction'] == 'increasing' else 'lower'} limit"),
             "severity"     : "MEDIUM",   # trends are pre-fault by definition
             "step"         : raw["step"],
-            "time_to_breach": raw["time_to_breach"],
-            "explanation"  : raw["explanation"],
+            "time_to_breach": raw["time_to_breach"]
+            #"explanation"  : raw["explanation"],
         }
 
 
