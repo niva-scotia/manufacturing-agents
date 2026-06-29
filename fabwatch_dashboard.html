@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>FABWATCH — FAB 2 · PHOENIX</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2330;
+    --border: #21262d;
+    --border2: #30363d;
+    --text: #e6edf3;
+    --muted: #7d8590;
+    --green: #3fb950;
+    --yellow: #d29922;
+    --red: #f85149;
+    --blue: #58a6ff;
+    --fault-glow: rgba(248,81,73,0.18);
+    --watch-glow: rgba(210,153,34,0.14);
+    font-family: 'SF Mono', 'Consolas', 'Menlo', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-size: 11px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* HEADER */
+  .header { display: flex; align-items: center; gap: 12px; padding: 0 14px; height: 44px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .logo-block { display: flex; align-items: center; gap: 8px; margin-right: 4px; }
+  .logo-badge { background: var(--blue); color: #fff; font-weight: 700; font-size: 12px; padding: 2px 6px; border-radius: 3px; letter-spacing: 1px; }
+  .logo-name { font-weight: 700; font-size: 13px; letter-spacing: 1.5px; color: var(--text); }
+  .logo-sub { font-size: 9px; color: var(--muted); letter-spacing: 1px; }
+  .pipeline { display: flex; align-items: center; gap: 6px; background: var(--surface2); border: 1px solid var(--border2); border-radius: 4px; padding: 4px 10px; margin-left: 8px; }
+  .pipe-stage { font-size: 9px; font-weight: 600; letter-spacing: 1.2px; color: var(--blue); }
+  .pipe-stage.active { color: var(--text); }
+  .pipe-arrow { color: var(--muted); font-size: 10px; }
+  .hspacer { flex: 1; }
+  .fault-counts { display: flex; gap: 14px; align-items: center; }
+  .fc { display: flex; align-items: center; gap: 5px; font-size: 10px; letter-spacing: 0.8px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+  .dot.red { background: var(--red); box-shadow: 0 0 5px var(--red); }
+  .dot.yellow { background: var(--yellow); box-shadow: 0 0 5px var(--yellow); }
+  .dot.green { background: var(--green); }
+  .clock { font-size: 11px; color: var(--text); letter-spacing: 1px; margin: 0 6px; }
+  .btn { background: var(--surface2); border: 1px solid var(--border2); color: var(--muted); font-size: 9px; font-family: inherit; letter-spacing: 1px; padding: 4px 10px; border-radius: 3px; cursor: pointer; }
+  .btn.active { color: var(--text); border-color: var(--blue); }
+  .divider { width: 1px; height: 20px; background: var(--border2); }
+
+  /* MAIN */
+  .main { display: flex; flex: 1; min-height: 0; }
+
+  /* PLANT FLOOR */
+  .plant { flex: 1; min-width: 0; display: flex; flex-direction: column; border-right: 1px solid var(--border); overflow: hidden; }
+  .plant-header { display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .plant-title { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; }
+  .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+  .plant-legend { display: flex; gap: 12px; margin-left: auto; }
+  .leg { display: flex; align-items: center; gap: 4px; font-size: 9px; color: var(--muted); letter-spacing: 0.8px; }
+  .plant-sub { padding: 5px 14px; font-size: 9px; color: var(--muted); letter-spacing: 0.8px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .chambers { display: flex; gap: 12px; padding: 12px 14px; flex: 1; min-height: 0; overflow: hidden; }
+
+  /* CHAMBER CARD */
+  .chamber-card {
+    flex: 1; border-radius: 6px; border: 1.5px solid var(--border2);
+    background: var(--surface2); padding: 12px; display: flex; flex-direction: column;
+    cursor: pointer; transition: border-color 0.2s, box-shadow 0.2s;
+    min-width: 0;
+  }
+  .chamber-card:hover { border-color: var(--blue); }
+  .chamber-card.fault { border-color: var(--red); box-shadow: 0 0 20px var(--fault-glow), inset 0 0 30px var(--fault-glow); }
+  .chamber-card.watch { border-color: var(--yellow); box-shadow: 0 0 14px var(--watch-glow); }
+  .chamber-card.selected { border-color: var(--blue); box-shadow: 0 0 14px rgba(88,166,255,0.15); }
+  .ch-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  .ch-name { font-size: 16px; font-weight: 700; letter-spacing: 1px; }
+  .ch-dot { width: 9px; height: 9px; border-radius: 50%; }
+  .ch-dot.green { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .ch-dot.red { background: var(--red); box-shadow: 0 0 8px var(--red); animation: pulse 1.5s infinite; }
+  .ch-dot.yellow { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
+  .ch-status-badge { font-size: 9px; font-weight: 600; letter-spacing: 1.2px; }
+  .ch-status-badge.fault { color: var(--red); }
+  .ch-status-badge.watch { color: var(--yellow); }
+  .ch-status-badge.nominal { color: var(--green); }
+  .ch-diagram { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
+  .ch-footer { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 6px; }
+  .ch-label { font-size: 9px; color: var(--muted); letter-spacing: 0.8px; }
+  .ch-bay { font-size: 8px; color: var(--muted); letter-spacing: 0.8px; }
+  .service-aisle { writing-mode: vertical-rl; font-size: 7px; color: var(--border2); letter-spacing: 2px; align-self: center; padding: 0 2px; }
+
+  /* SIDEBAR */
+  .sidebar { width: 310px; flex-shrink: 0; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* INCOMING ERRORS */
+  .panel { display: flex; flex-direction: column; border-bottom: 1px solid var(--border); }
+  .panel-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .panel-title { font-size: 10px; font-weight: 700; letter-spacing: 1.2px; }
+  .count-badge { background: var(--red); color: #fff; font-size: 9px; font-weight: 700; width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+  .errors-list { overflow-y: auto; max-height: 240px; }
+  .error-item { padding: 8px 12px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.15s; display: flex; flex-direction: column; gap: 3px; }
+  .error-item:hover { background: var(--surface2); }
+  .error-item.anomaly { border-left: 2px solid var(--red); }
+  .error-item.trend { border-left: 2px solid var(--yellow); }
+  .error-top { display: flex; align-items: center; gap: 6px; justify-content: space-between; }
+  .error-chamber { font-size: 9px; font-weight: 700; color: var(--text); }
+  .tag { font-size: 8px; padding: 1px 5px; border-radius: 2px; font-weight: 600; letter-spacing: 0.5px; }
+  .tag.anomaly { background: rgba(248,81,73,0.15); color: var(--red); border: 1px solid rgba(248,81,73,0.3); }
+  .tag.trend { background: rgba(210,153,34,0.15); color: var(--yellow); border: 1px solid rgba(210,153,34,0.3); }
+  .error-time { font-size: 8px; color: var(--muted); }
+  .error-desc { font-size: 10px; color: var(--text); }
+  .error-id { font-size: 8px; color: var(--muted); letter-spacing: 0.5px; }
+
+  /* MACHINE DETAIL */
+  .detail-panel { flex: 1; overflow-y: auto; min-height: 0; }
+  .fault-tag { display: inline-block; background: rgba(248,81,73,0.15); color: var(--red); border: 1px solid rgba(248,81,73,0.3); font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 2px; letter-spacing: 0.8px; margin-left: 6px; }
+  .watch-tag { display: inline-block; background: rgba(210,153,34,0.15); color: var(--yellow); border: 1px solid rgba(210,153,34,0.3); font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 2px; letter-spacing: 0.8px; margin-left: 6px; }
+  .meta-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  .meta-item label { font-size: 8px; color: var(--muted); letter-spacing: 0.8px; display: block; margin-bottom: 2px; }
+  .meta-item span { font-size: 10px; color: var(--text); }
+  .sensor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  .sensor-box { background: var(--surface); border: 1px solid var(--border2); border-radius: 4px; padding: 8px; }
+  .sensor-box.fault { border-color: rgba(248,81,73,0.4); background: rgba(248,81,73,0.05); }
+  .sensor-box.watch { border-color: rgba(210,153,34,0.4); background: rgba(210,153,34,0.05); }
+  .sensor-label { font-size: 8px; color: var(--muted); letter-spacing: 0.8px; margin-bottom: 3px; }
+  .sensor-value { font-size: 16px; font-weight: 600; color: var(--text); }
+  .sensor-value.fault { color: var(--red); }
+  .sensor-value.watch { color: var(--yellow); }
+  .sensor-unit { font-size: 9px; color: var(--muted); }
+  .findings { padding: 8px 12px; }
+  .findings-label { font-size: 9px; color: var(--muted); letter-spacing: 1px; margin-bottom: 6px; font-weight: 600; }
+  .finding-item { display: flex; gap: 6px; margin-bottom: 6px; align-items: flex-start; }
+  .finding-text { font-size: 9px; color: var(--text); line-height: 1.4; }
+
+  /* TREND WATCH */
+  .trend-bar { height: 72px; background: var(--surface); border-top: 1px solid var(--border); flex-shrink: 0; display: flex; align-items: stretch; overflow: hidden; }
+  .trend-label-block { padding: 0 12px; display: flex; flex-direction: column; justify-content: center; gap: 2px; border-right: 1px solid var(--border); min-width: 130px; }
+  .trend-title { font-size: 9px; font-weight: 700; letter-spacing: 1.2px; color: var(--muted); }
+  .trend-items { display: flex; flex: 1; overflow-x: auto; }
+  .trend-item { flex: 1; min-width: 180px; padding: 8px 12px; border-right: 1px solid var(--border); display: flex; flex-direction: column; justify-content: space-between; }
+  .trend-top { display: flex; align-items: center; justify-content: space-between; }
+  .trend-name { font-size: 9px; font-weight: 600; letter-spacing: 0.5px; }
+  .trend-pct { font-size: 11px; font-weight: 700; }
+  .trend-pct.red { color: var(--red); }
+  .trend-pct.yellow { color: var(--yellow); }
+  .trend-pct.green { color: var(--green); }
+  .trend-sparkline { height: 20px; }
+  .trend-bottom { display: flex; align-items: center; justify-content: space-between; }
+  .trend-desc { font-size: 8px; color: var(--muted); }
+  .trend-agent-badge { font-size: 7px; background: var(--surface2); border: 1px solid var(--border2); padding: 1px 4px; border-radius: 2px; color: var(--muted); }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo-block">
+    <div class="logo-badge">F2</div>
+    <div>
+      <div class="logo-name">FABWATCH</div>
+      <div class="logo-sub">FAB 2 · PHOENIX</div>
+    </div>
+  </div>
+  <div class="pipeline">
+    <span class="pipe-stage active">ANOMALY + TREND</span>
+    <span class="pipe-arrow">→</span>
+    <span class="pipe-stage">QUALITY</span>
+  </div>
+  <div class="hspacer"></div>
+  <div class="fault-counts">
+    <div class="fc"><span class="dot red"></span> <span id="cnt-fault">2</span> FAULT</div>
+    <div class="fc"><span class="dot yellow"></span> <span id="cnt-watch">2</span> WATCH</div>
+    <div class="fc"><span class="dot green"></span> <span id="cnt-ok">0</span> OK</div>
+  </div>
+  <div class="divider"></div>
+  <div class="clock" id="clock">--:--:--</div>
+  <button class="btn" id="pauseBtn">PAUSE</button>
+  <button class="btn active" id="soundBtn">SOUND ON</button>
+</div>
+
+<div class="main">
+  <div class="plant">
+    <div class="plant-header">
+      <div class="plant-title">PLANT FLOOR</div>
+      <div class="live-dot"></div>
+      <span style="font-size:9px;color:var(--green);letter-spacing:0.8px;">LIVE</span>
+      <div class="plant-legend">
+        <div class="leg"><span class="dot" style="background:var(--green);"></span> NOMINAL</div>
+        <div class="leg"><span class="dot" style="background:var(--yellow);"></span> WATCH</div>
+        <div class="leg"><span class="dot" style="background:var(--red);"></span> FAULT</div>
+        <div class="leg"><span class="dot" style="background:var(--border2);"></span> IDLE</div>
+      </div>
+    </div>
+    <div class="plant-sub">FAB 2 · DRY PROCESS FLOOR</div>
+    <div class="chambers">
+      <!-- CHA -->
+      <div class="chamber-card watch" id="card-CHA" onclick="selectChamber('CHA')">
+        <div class="ch-header">
+          <span class="ch-name">CHA <span class="ch-dot yellow" style="display:inline-block;vertical-align:middle;margin-left:4px;"></span></span>
+          <span class="ch-status-badge watch">WATCH</span>
+        </div>
+        <div class="ch-diagram">
+          <svg viewBox="0 0 260 190" width="100%" height="100%" style="max-height:170px;">
+            <polygon points="60,20 80,10 100,20 100,40 80,50 60,40" fill="#1c2330" stroke="#3fb950" stroke-width="1.5"/>
+            <circle cx="80" cy="30" r="5" fill="none" stroke="#3fb950" stroke-width="1.5"/>
+            <circle cx="80" cy="30" r="2" fill="#3fb950"/>
+            <polygon points="155,20 175,10 195,20 195,40 175,50 155,40" fill="#1c2330" stroke="#3fb950" stroke-width="1.5"/>
+            <circle cx="175" cy="30" r="5" fill="none" stroke="#3fb950" stroke-width="1.5"/>
+            <circle cx="175" cy="30" r="2" fill="#3fb950"/>
+            <polygon points="25,75 45,65 65,75 65,95 45,105 25,95" fill="#1c2330" stroke="#3fb950" stroke-width="1.5"/>
+            <circle cx="45" cy="85" r="5" fill="none" stroke="#3fb950" stroke-width="1.5"/>
+            <circle cx="45" cy="85" r="2" fill="#3fb950"/>
+            <polygon points="90,65 120,55 150,65 150,95 120,105 90,95" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
+            <circle cx="120" cy="80" r="8" fill="none" stroke="#30363d" stroke-width="1.5"/>
+            <line x1="112" y1="80" x2="128" y2="80" stroke="#30363d" stroke-width="1"/>
+            <line x1="120" y1="72" x2="120" y2="88" stroke="#30363d" stroke-width="1"/>
+            <polygon points="175,75 195,65 215,75 215,95 195,105 175,95" fill="#1c2330" stroke="#3fb950" stroke-width="1.5"/>
+            <circle cx="195" cy="85" r="5" fill="none" stroke="#3fb950" stroke-width="1.5"/>
+            <circle cx="195" cy="85" r="2" fill="#3fb950"/>
+            <line x1="80" y1="50" x2="107" y2="65" stroke="#30363d" stroke-width="1"/>
+            <line x1="175" y1="50" x2="148" y2="65" stroke="#30363d" stroke-width="1"/>
+            <line x1="65" y1="85" x2="90" y2="80" stroke="#30363d" stroke-width="1"/>
+            <line x1="150" y1="80" x2="175" y2="80" stroke="#30363d" stroke-width="1"/>
+            <rect x="85" y="110" width="30" height="18" rx="2" fill="#1c2330" stroke="#30363d" stroke-width="1.2"/>
+            <rect x="125" y="110" width="30" height="18" rx="2" fill="#1c2330" stroke="#30363d" stroke-width="1.2"/>
+            <line x1="100" y1="110" x2="107" y2="105" stroke="#30363d" stroke-width="1"/>
+            <line x1="140" y1="110" x2="133" y2="105" stroke="#30363d" stroke-width="1"/>
+            <rect x="60" y="140" width="130" height="22" rx="2" fill="#1c2330" stroke="#30363d" stroke-width="1.2"/>
+            <text x="125" y="155" text-anchor="middle" fill="#7d8590" font-size="8" font-family="monospace" letter-spacing="0.5">EFEM</text>
+            <!-- Trend pulse on pressure module -->
+            <circle cx="195" cy="85" r="12" fill="none" stroke="#d29922" stroke-width="1" opacity="0.5">
+              <animate attributeName="r" values="10;16;10" dur="2s" repeatCount="indefinite"/>
+              <animate attributeName="opacity" values="0.5;0;0.5" dur="2s" repeatCount="indefinite"/>
+            </circle>
+          </svg>
+        </div>
+        <div class="ch-footer">
+          <div>
+            <div class="ch-label">Multi-Chamber Etch System</div>
+            <div class="ch-bay" style="margin-top:2px;">BAY 2 · ETCH</div>
+          </div>
+          <div style="text-align:right;">
+            <div class="ch-bay">LOT_31B</div>
+            <div class="ch-bay" style="margin-top:1px;">W3142</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="service-aisle">SERVICE AISLE</div>
+
+      <!-- CHB -->
+      <div class="chamber-card fault" id="card-CHB" onclick="selectChamber('CHB')">
+        <div class="ch-header">
+          <span class="ch-name">CHB <span class="ch-dot red" style="display:inline-block;vertical-align:middle;margin-left:4px;"></span></span>
+          <span class="ch-status-badge fault">FAULT</span>
+        </div>
+        <div class="ch-diagram">
+          <svg viewBox="0 0 260 190" width="100%" height="100%" style="max-height:170px;">
+            <polygon points="60,20 80,10 100,20 100,40 80,50 60,40" fill="#2a1a1a" stroke="#f85149" stroke-width="1.5"/>
+            <circle cx="80" cy="30" r="5" fill="none" stroke="#f85149" stroke-width="1.5"/>
+            <circle cx="80" cy="30" r="2" fill="#f85149"/>
+            <circle cx="80" cy="30" r="9" fill="none" stroke="#f85149" stroke-width="0.8" opacity="0.4">
+              <animate attributeName="r" values="7;13;7" dur="1.5s" repeatCount="indefinite"/>
+              <animate attributeName="opacity" values="0.4;0;0.4" dur="1.5s" repeatCount="indefinite"/>
+            </circle>
+            <polygon points="155,20 175,10 195,20 195,40 175,50 155,40" fill="#1c2330" stroke="#30363d" stroke-width="1.5"/>
+            <circle cx="175" cy="30" r="5" fill="none" stroke="#30363d" stroke-width="1.2"/>
+            <polygon points="90,65 120,55 150,65 150,95 120,105 90,95" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
+            <circle cx="120" cy="80" r="8" fill="none" stroke="#30363d" stroke-width="1.5"/>
+            <line x1="112" y1="80" x2="128" y2="80" stroke="#30363d" stroke-width="1"/>
+            <line x1="120" y1="72" x2="120" y2="88" stroke="#30363d" stroke-width="1"/>
+            <polygon points="175,75 195,65 215,75 215,95 195,105 175,95" fill="#1c2330" stroke="#3fb950" stroke-width="1.5"/>
+            <circle cx="195" cy="85" r="5" fill="none" stroke="#3fb950" stroke-width="1.5"/>
+            <circle cx="195" cy="85" r="2" fill="#3fb950"/>
+            <line x1="80" y1="50" x2="107" y2="65" stroke="#f85149" stroke-width="1" opacity="0.5"/>
+            <line x1="175" y1="50" x2="148" y2="65" stroke="#30363d" stroke-width="1"/>
+            <line x1="150" y1="80" x2="175" y2="80" stroke="#30363d" stroke-width="1"/>
+            <rect x="85" y="110" width="30" height="18" rx="2" fill="#1c2330" stroke="#30363d" stroke-width="1.2"/>
+            <rect x="125" y="110" width="30" height="18" rx="2" fill="#1c2330" stroke="#30363d" stroke-width="1.2"/>
+            <line x1="100" y1="110" x2="107" y2="105" stroke="#30363d" stroke-width="1"/>
+            <line x1="140" y1="110" x2="133" y2="105" stroke="#30363d" stroke-width="1"/>
+            <rect x="60" y="140" width="130" height="22" rx="2" fill="#1c2330" stroke="#30363d" stroke-width="1.2"/>
+            <text x="125" y="155" text-anchor="middle" fill="#7d8590" font-size="8" font-family="monospace" letter-spacing="0.5">EFEM</text>
+          </svg>
+        </div>
+        <div class="ch-footer">
+          <div>
+            <div class="ch-label">Multi-Chamber Etch System</div>
+            <div class="ch-bay" style="margin-top:2px;">BAY 3 · ETCH</div>
+          </div>
+          <div style="text-align:right;">
+            <div class="ch-bay">LOT_31B</div>
+            <div class="ch-bay" style="margin-top:1px;">W3143</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="panel" style="flex-shrink:0;">
+      <div class="panel-header">
+        <span class="panel-title">INCOMING ERRORS</span>
+        <span class="count-badge" id="error-count">8</span>
+      </div>
+      <div class="errors-list" id="errors-list"></div>
+    </div>
+    <div class="detail-panel" id="detail-panel">
+      <div style="padding:8px 12px;border-bottom:1px solid var(--border);">
+        <div id="detail-panel-title" style="font-size:10px;font-weight:700;letter-spacing:1.2px;margin-bottom:2px;">MACHINE DETAIL</div>
+      </div>
+      <div id="detail-content"></div>
+    </div>
+  </div>
+</div>
+<style>
+  #detail-panel-title { transition: color 0.15s; }
+</style>
+
+<!-- TREND WATCH -->
+<div class="trend-bar">
+  <div class="trend-label-block">
+    <div class="trend-title">TREND WATCH</div>
+    <div style="font-size:7px;color:var(--blue);letter-spacing:0.8px;margin-top:2px;">ANOMALY AGENT</div>
+  </div>
+  <div class="trend-items" id="trend-items"></div>
+</div>
+
+<script>
+const CHAMBERS = {
+  CHA: {
+    name: 'CHA', status: 'watch', bay: 'BAY 2 · ETCH',
+    machine: 'Multi-Chamber Etch System',
+    lot: 'LOT_31B', wafer: 3142, recipe: 'METAL_ETCH_A_V3',
+    shift: 'DAY', rf_hrs: 1241.73, pm_count: 43,
+    wafers_total: 43, wafers_fail: 5,
+    open_wo: 'NONE', oee: 0.0,
+    sensors: {
+      'TCP TOP PWR':   { val: 349.46, unit: 'W',    min: 334, max: 360, status: 'ok'    },
+      'BCl3 FLOW':     { val: 750.0,  unit: 'sccm', min: 740, max: 765, status: 'ok'    },
+      'PRESSURE':      { val: 1261.0, unit: 'mTorr',min: 942, max: 1420,status: 'watch' },
+      'RF BTM PWR':    { val: 133.0,  unit: 'W',    min: 124, max: 142, status: 'ok'    },
+    },
+    findings: [
+      '⚠ tcp_top_pwr exceeded 360 W on wafer 3142 step 0 (+1.0 W)',
+      '↑ Pressure trending upward — slope +25.0 mTorr/step, R²=0.937',
+      '⚠ 43 wafers since last PM — maintenance window approaching',
+      '⚠ bcl3_flow below threshold on wafer 3122 (LOT_31B)',
+    ]
+  },
+  CHB: {
+    name: 'CHB', status: 'fault', bay: 'BAY 3 · ETCH',
+    machine: 'Multi-Chamber Etch System',
+    lot: 'LOT_31B', wafer: 3143, recipe: 'METAL_ETCH_A_V3',
+    shift: 'DAY', rf_hrs: 988.47, pm_count: 43,
+    wafers_total: 43, wafers_fail: 5,
+    open_wo: 'WO-CHB-3143', oee: 0.0,
+    sensors: {
+      'TCP TOP PWR':   { val: 344.16, unit: 'W',    min: 334, max: 360, status: 'ok'   },
+      'BCl3 FLOW':     { val: 751.0,  unit: 'sccm', min: 740, max: 765, status: 'ok'   },
+      'PRESSURE':      { val: 1296.0, unit: 'mTorr',min: 942, max: 1420,status: 'ok'   },
+      'RF BTM PWR':    { val: 133.0,  unit: 'W',    min: 124, max: 142, status: 'ok'   },
+    },
+    findings: [
+      '🚨 tcp_top_pwr exceeded 360 W on wafer 3143 — FAIL logged',
+      '🚨 Open work order: WO-CHB-3143 (unresolved)',
+      '↑ Pressure trend detected on wafer 2918 — slope +36.4 mTorr/step',
+      '⚠ bcl3_flow below threshold on wafers 3141 (98 steps affected)',
+    ]
+  }
+};
+
+const ERRORS = [
+  { time:'09:48:32', chamber:'CHB', lot:'LOT_31B', wafer:3143, sensor:'tcp_top_pwr', value:360.46, min:334, max:360, type:'anomaly', id:'ANM-3912', desc:'TCP top power exceeded maximum threshold' },
+  { time:'09:43:17', chamber:'CHA', lot:'LOT_31B', wafer:3142, sensor:'tcp_top_pwr', value:361.0,  min:334, max:360, type:'anomaly', id:'ANM-3908', desc:'TCP top power exceeded maximum threshold' },
+  { time:'09:39:10', chamber:'CHB', lot:'LOT_31B', wafer:3141, sensor:'bcl3_flow',   value:724.47, min:740, max:765, type:'anomaly', id:'ANM-3905', desc:'BCl3 flow dropped below minimum threshold' },
+  { time:'09:39:10', chamber:'CHB', lot:'LOT_31B', wafer:3141, sensor:'tcp_top_pwr', value:361.0,  min:334, max:360, type:'anomaly', id:'ANM-3904', desc:'TCP top power exceeded maximum threshold' },
+  { time:'09:34:48', chamber:'CHA', lot:'LOT_31B', wafer:3122, sensor:'bcl3_flow',   value:724.47, min:740, max:765, type:'anomaly', id:'ANM-3901', desc:'BCl3 flow dropped below minimum threshold' },
+  { time:'09:27:00', chamber:'CHA', lot:'LOT_31B', wafer:3120, sensor:'tcp_top_pwr', value:360.28, min:334, max:360, type:'anomaly', id:'ANM-3897', desc:'TCP top power exceeded maximum threshold' },
+  { time:'09:22:21', chamber:'CHB', lot:'LOT_31B', wafer:3140, sensor:'tcp_top_pwr', value:361.0,  min:334, max:360, type:'anomaly', id:'ANM-3893', desc:'TCP top power exceeded maximum threshold' },
+  { time:'08:56:31', chamber:'CHA', lot:'LOT_31B', wafer:3137, sensor:'tcp_top_pwr', value:361.0,  min:334, max:360, type:'anomaly', id:'ANM-3889', desc:'TCP top power exceeded maximum threshold' },
+];
+
+const PRESSURE_CHA = [1074,1072,1072,1118,1135,1176,1212,1227,1175,1196,1200,1194,1196,1198,1195,1197,1197,1195,1193,1193,1194,1198,1196,1197,1196,1195,1199,1196,1194,1197,1211,1200,1204,1105,1108,1158,1200,1196,1197,1195,1196,1193,1196,1195,1189,1190,1196,1196,1207,1202,1214,1205,1192,1195,1198,1198,1194,1198,1197,1197,1196,1196,1195,1196,1197,1195,1194,1195,1195,1198,1196,1196,1197,1197,1198,1197,1195,1195,1198,1196,1195,1261];
+const PRESSURE_CHB = [943,943,942,1042,1117,1172,1196,1215,1231,1178,1201,1207,1200,1205,1203,1207,1199,1203,1202,1202,1202,1201,1203,1201,1203,1204,1201,1201,1201,1200,1201,1201,1200,1203,1200,1204,1202,1200,1204,1202,1211,1214,1203,1144,973,1102,1181,1213,1201,1199,1202,1202,1199,1199,1203,1195,1195,1192,1205,1212,1212,1212,1224,1217,1194,1203,1203,1204,1201,1204,1203,1200,1201,1203,1202,1200,1202,1200,1201,1203,1201,1201,1199,1201,1201,1199,1200,1199,1202,1202,1201,1220];
+
+const TRENDS = [
+  { chamber:'CHA', label:'CHA · PC3 pressure', direction:'increasing', slope:25.0, r2:0.9369, range_frac:42, steps_to_breach:7, data: PRESSURE_CHA, color:'#d29922' },
+  { chamber:'CHB', label:'CHB · PC1 pressure', direction:'increasing', slope:36.44, r2:0.851, range_frac:61, steps_to_breach:6, data: PRESSURE_CHB, color:'#f85149' },
+];
+
+// Maps ERRORS sensor keys → CHAMBERS.sensors display keys
+const SENSOR_LABEL_MAP = {
+  'tcp_top_pwr': 'TCP TOP PWR',
+  'bcl3_flow':   'BCl3 FLOW',
+  'pressure':    'PRESSURE',
+  'rf_btm_pwr':  'RF BTM PWR',
+};
+
+function renderErrors() {
+  document.getElementById('errors-list').innerHTML = ERRORS.map((e, i) => `
+    <div class="error-item ${e.type}" id="err-${i}" onclick="openError(${i})">
+      <div class="error-top">
+        <span>
+          <span class="error-chamber">${e.chamber}</span>
+          <span style="color:var(--muted);font-size:9px;"> ${e.lot}</span>
+          <span class="tag ${e.type}" style="margin-left:4px;">${e.type === 'anomaly' ? 'Anomaly' : 'Trend'}</span>
+        </span>
+        <span class="error-time">${e.time}</span>
+      </div>
+      <div class="error-desc">${e.desc}</div>
+      <div class="error-id">${e.id} · W${e.wafer} · ${e.sensor} = ${e.value.toFixed(2)} [${e.min}–${e.max}]</div>
+    </div>
+  `).join('');
+}
+
+function openError(idx) {
+  // Highlight the clicked error row
+  document.querySelectorAll('.error-item').forEach(el => el.style.background = '');
+  const row = document.getElementById('err-' + idx);
+  if (row) row.style.background = 'rgba(88,166,255,0.06)';
+  // Select the chamber and pass fault snapshot
+  const e = ERRORS[idx];
+  document.querySelectorAll('.chamber-card').forEach(c => c.classList.remove('selected'));
+  const card = document.getElementById('card-' + e.chamber);
+  if (card) card.classList.add('selected');
+  renderDetail(e.chamber, e);
+}
+
+function renderDetail(chName, fault) {
+  const ch = CHAMBERS[chName];
+  const statusTag = ch.status === 'fault'
+    ? `<span class="fault-tag">FAULT</span>`
+    : `<span class="watch-tag">WATCH</span>`;
+
+  const faultSensorLabel = fault ? SENSOR_LABEL_MAP[fault.sensor] : null;
+
+  const sensorHtml = Object.entries(ch.sensors).map(([name, s]) => {
+    const isHit = faultSensorLabel === name;
+    if (isHit) {
+      // Show fault-time value prominently, current reading below
+      const dir = fault.value > fault.max ? `+${(fault.value - fault.max).toFixed(2)} above max` : `${(fault.value - fault.min).toFixed(2)} below min`;
+      return `<div class="sensor-box fault">
+        <div class="sensor-label" style="display:flex;align-items:center;justify-content:space-between;">
+          <span>${name}</span>
+          <span style="font-size:7px;background:rgba(248,81,73,0.2);color:var(--red);padding:1px 4px;border-radius:2px;letter-spacing:0.5px;">FAULT SNAPSHOT</span>
+        </div>
+        <div class="sensor-value fault">${fault.value.toFixed(2)} <span class="sensor-unit">${s.unit}</span></div>
+        <div style="font-size:8px;color:var(--red);margin-top:1px;">${dir} · W${fault.wafer} @ ${fault.time}</div>
+        <div style="margin-top:5px;padding-top:5px;border-top:1px solid var(--border2);display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:8px;color:var(--muted);letter-spacing:0.5px;">NOW</span>
+          <span style="font-size:11px;color:var(--muted);">${s.val.toFixed(1)} <span style="font-size:8px;">${s.unit}</span></span>
+        </div>
+      </div>`;
+    }
+    const cls = s.status === 'fault' ? 'fault' : s.status === 'watch' ? 'watch' : '';
+    return `<div class="sensor-box ${cls}">
+      <div class="sensor-label">${name}</div>
+      <div class="sensor-value ${cls}">${s.val.toFixed(1)} <span class="sensor-unit">${s.unit}</span></div>
+    </div>`;
+  }).join('');
+
+  const findingsHtml = ch.findings.map(f => `<div class="finding-item"><span class="finding-text">${f}</span></div>`).join('');
+
+  const titleEl = document.getElementById('detail-panel-title');
+  if (titleEl) titleEl.innerHTML = fault
+    ? `MACHINE DETAIL <span style="font-size:8px;color:var(--muted);font-weight:400;letter-spacing:0.5px;margin-left:4px;">· ${fault.id}</span>`
+    : `MACHINE DETAIL`;
+
+  document.getElementById('detail-content').innerHTML = `
+    <div style="padding:8px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+      <div>
+        <span style="font-size:12px;font-weight:700;">${ch.name}</span>${statusTag}
+        <div style="font-size:9px;color:var(--muted);margin-top:2px;">${ch.machine}</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:8px;color:var(--muted);">OEE</div>
+        <div style="font-size:13px;font-weight:700;color:var(--yellow);">${(ch.oee*100).toFixed(0)}%</div>
+      </div>
+    </div>
+    <div class="meta-grid">
+      <div class="meta-item"><label>CHAMBER</label><span>${ch.name}</span></div>
+      <div class="meta-item"><label>LOT</label><span>${ch.lot}</span></div>
+      <div class="meta-item"><label>WAFERS</label><span>${ch.wafer % 100}/${ch.wafers_total}</span></div>
+      <div class="meta-item"><label>RECIPE</label><span style="font-size:9px;">${ch.recipe.replace('METAL_ETCH_A_','')}</span></div>
+      <div class="meta-item"><label>RF HRS</label><span>${ch.rf_hrs}h</span></div>
+      <div class="meta-item"><label>PM COUNT</label><span style="color:${ch.pm_count>=40?'var(--yellow)':'var(--text)'};">${ch.pm_count}</span></div>
+      <div class="meta-item"><label>SHIFT</label><span>${ch.shift}</span></div>
+      <div class="meta-item"><label>FAILS</label><span style="color:${ch.wafers_fail>0?'var(--red)':'var(--text)'};">${ch.wafers_fail}</span></div>
+      <div class="meta-item"><label>WORK ORDER</label><span style="font-size:8px;color:${ch.open_wo!=='NONE'?'var(--red)':'var(--muted)'};">${ch.open_wo}</span></div>
+    </div>
+    <div class="sensor-grid">${sensorHtml}</div>
+    <div class="findings"><div class="findings-label">AGENT FINDINGS</div>${findingsHtml}</div>
+  `;
+}
+
+function selectChamber(name) {
+  document.querySelectorAll('.chamber-card').forEach(c => c.classList.remove('selected'));
+  document.querySelectorAll('.error-item').forEach(el => el.style.background = '');
+  const card = document.getElementById('card-' + name);
+  if (card) card.classList.add('selected');
+  renderDetail(name);
+}
+
+function sparkline(data, color, w, h) {
+  const mn = Math.min(...data), mx = Math.max(...data), rng = mx - mn || 1;
+  const pts = data.map((v,i) => `${((i/(data.length-1))*w).toFixed(1)},${(h-((v-mn)/rng)*h).toFixed(1)}`).join(' ');
+  const last_x = w, last_y = (h-((data[data.length-1]-mn)/rng)*h).toFixed(1);
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block;">
+    <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.2" stroke-linejoin="round"/>
+    <circle cx="${last_x}" cy="${last_y}" r="2" fill="${color}"/>
+  </svg>`;
+}
+
+function renderTrends() {
+  document.getElementById('trend-items').innerHTML = TRENDS.map(t => {
+    const pct = t.range_frac;
+    const pctCls = pct >= 60 ? 'red' : pct >= 40 ? 'yellow' : 'green';
+    return `<div class="trend-item">
+      <div class="trend-top">
+        <span class="trend-name">${t.label}</span>
+        <span class="trend-pct ${pctCls}">${pct}%</span>
+      </div>
+      <div class="trend-sparkline">${sparkline(t.data.slice(-40), t.color, 100, 20)}</div>
+      <div class="trend-bottom">
+        <span class="trend-desc">${t.direction} — breach in ~${t.steps_to_breach}s · R²=${t.r2}</span>
+        <span class="trend-agent-badge">ANOMALY AGENT</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function updateClock() {
+  document.getElementById('clock').textContent = new Date().toTimeString().slice(0,8);
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+renderErrors();
+renderTrends();
+selectChamber('CHB');
+
+document.getElementById('pauseBtn').addEventListener('click', function() {
+  this.classList.toggle('active');
+  this.textContent = this.classList.contains('active') ? 'RESUME' : 'PAUSE';
+});
+document.getElementById('soundBtn').addEventListener('click', function() {
+  this.classList.toggle('active');
+  this.textContent = this.classList.contains('active') ? 'SOUND ON' : 'SOUND OFF';
+});
+</script>
+</body>
+</html>
