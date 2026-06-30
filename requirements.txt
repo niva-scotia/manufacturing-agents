@@ -1,0 +1,5 @@
+openai==2.41.1
+chromadb==1.5.9
+pandas==2.2.2
+numpy==1.26.4
+python-dotenv==0.21.0

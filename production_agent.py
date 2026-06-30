@@ -33,6 +33,10 @@ from maintenance_agent import (
     run_maintenance_agent,
     print_recommendation,
 )
+from sop_agent import (
+    build_index as build_sop_index,
+    run_sop_agent,
+)
 from openai import OpenAI
 
 print("Imports successful.")
@@ -98,6 +102,20 @@ parts_df           = pd.read_csv(CMMS_PARTS_PATH)
 calib_df           = pd.read_csv(CMMS_CALIB_PATH)
 maintenance_client = AzureOpenAI(api_key=os.getenv("AZURE_API_KEY"), azure_endpoint=os.getenv("AZURE_ENDPOINT"), api_version=os.getenv("AZURE_API_VERSION"))
 print("Maintenance Agent vector store ready.")
+
+SOP_KB_PATHS = {
+    "sop":       "data/sop_procedures.csv",
+    "guides":    "data/troubleshooting_guides.csv",
+    "incidents": "data/incident_resolutions.csv",
+    "manuals":   "data/equipment_manuals.csv",
+}
+sop_store  = build_sop_index(SOP_KB_PATHS)
+sop_client = AzureOpenAI(
+    api_key        = os.getenv("AZURE_API_KEY"),
+    azure_endpoint = os.getenv("AZURE_ENDPOINT"),
+    api_version    = os.getenv("AZURE_API_VERSION"),
+)
+print("SOP Agent vector store ready.")
 
 # ## Cell 4 — Load and prepare data
 
@@ -558,6 +576,15 @@ def run_agent(data, thresholds, trend_config, max_rows=None):
                 )
                 print_recommendation(recommendation)
 
+                # ── Hand off to SOP Agent ─────────────────────────────
+                sop_report = run_sop_agent(
+                    alert, quality_report, recommendation,
+                    sop_store, sop_client
+                )
+                print("\n[SOP Agent Report]\n")
+                print(sop_report)
+                print(f"{'─' * 52}")
+
             else:
                 # value is within range — update history for trend analysis
                 history[wafer_id][sensor].append(value)
@@ -646,6 +673,15 @@ def run_agent(data, thresholds, trend_config, max_rows=None):
                             calib_df, maintenance_client
                         )
                         print_recommendation(recommendation)
+
+                        # ── Hand off to SOP Agent ─────────────────────
+                        sop_report = run_sop_agent(
+                            alert, quality_report, recommendation,
+                            sop_store, sop_client
+                        )
+                        print("\n[SOP Agent Report]\n")
+                        print(sop_report)
+                        print(f"{'─' * 52}")
 
     # ── Final summary ─────────────────────────────────────────────────────────
     print()
