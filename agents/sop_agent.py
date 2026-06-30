@@ -32,11 +32,12 @@ from dotenv import load_dotenv
 from pathlib import Path
 from chromadb.api.types import EmbeddingFunction
 
-load_dotenv(Path(__file__).parent / ".env")
+_ROOT = Path(__file__).parent.parent
+load_dotenv(_ROOT / ".env")
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-CHROMA_DB_PATH  = "chroma_db"
+CHROMA_DB_PATH  = str(_ROOT / "chroma_db")
 COLLECTION_NAME = "sop_knowledge_base"
 EMBEDDING_MODEL = "text-embedding-3-small"
 TOP_K           = 5
@@ -45,10 +46,10 @@ OPENAI_MODEL    = os.getenv("AZURE_DEPLOYMENT")
 TOTAL_EXPECTED_DOCS = 54  # 15 SOPs + 12 guides + 12 incidents + 15 manuals
 
 DEFAULT_CSV_PATHS = {
-    "sop":       "data/sop_procedures.csv",
-    "guides":    "data/troubleshooting_guides.csv",
-    "incidents": "data/incident_resolutions.csv",
-    "manuals":   "data/equipment_manuals.csv",
+    "sop":       str(_ROOT / "data/sop_procedures.csv"),
+    "guides":    str(_ROOT / "data/troubleshooting_guides.csv"),
+    "incidents": str(_ROOT / "data/incident_resolutions.csv"),
+    "manuals":   str(_ROOT / "data/equipment_manuals.csv"),
 }
 
 

@@ -12,6 +12,10 @@
 # ## Cell 1 — Install dependencies
 
 import sys, subprocess
+from pathlib import Path as _Path
+_ROOT = _Path(__file__).parent.parent
+if str(_Path(__file__).parent) not in sys.path:
+    sys.path.insert(0, str(_Path(__file__).parent))
 
 # install all required packages including python-dotenv
 subprocess.run([sys.executable, "-m", "pip", "install", 
@@ -41,8 +45,8 @@ from openai import OpenAI
 
 print("Imports successful.")
 
-# load .env from the same folder as this script
-env_path = Path(__file__).parent / ".env"
+# load .env from the project root (manufacturing-agents/)
+env_path = _ROOT / ".env"
 load_dotenv(dotenv_path=env_path)
 
 # verify .env was found
@@ -82,7 +86,7 @@ print(f"Azure OpenAI client ready.")
 # ── Quality Agent initialisation ──────────────────────────────────────────────
 # Build the vector index once at startup — stays in memory for the full run.
 # The quality_agent.py file must be in the same directory as this script.
-QUALITY_RECORDS_PATH = "data/quality_records.csv"
+QUALITY_RECORDS_PATH = str(_ROOT / "data/quality_records.csv")
 quality_store  = build_index(QUALITY_RECORDS_PATH)
 quality_client = AzureOpenAI(api_key=os.getenv("AZURE_API_KEY"), azure_endpoint=os.getenv("AZURE_ENDPOINT"), api_version=os.getenv("AZURE_API_VERSION"))
 print("Quality Agent vector store ready.")
@@ -91,10 +95,10 @@ print("Quality Agent vector store ready.")
 # Build the work-order vector index once at startup, and load the three CMMS
 # lookup tables (PM schedule, spare parts, calibration) into memory.
 # The maintenance_agent.py file must be in the same directory as this script.
-CMMS_WO_PATH    = "data/cmms_work_orders.csv"
-CMMS_PM_PATH    = "data/cmms_pm_schedule.csv"
-CMMS_PARTS_PATH = "data/cmms_spare_parts.csv"
-CMMS_CALIB_PATH = "data/cmms_calibration.csv"
+CMMS_WO_PATH    = str(_ROOT / "data/cmms_work_orders.csv")
+CMMS_PM_PATH    = str(_ROOT / "data/cmms_pm_schedule.csv")
+CMMS_PARTS_PATH = str(_ROOT / "data/cmms_spare_parts.csv")
+CMMS_CALIB_PATH = str(_ROOT / "data/cmms_calibration.csv")
 
 wo_store           = build_wo_index(CMMS_WO_PATH)
 pm_df              = pd.read_csv(CMMS_PM_PATH)
@@ -104,10 +108,10 @@ maintenance_client = AzureOpenAI(api_key=os.getenv("AZURE_API_KEY"), azure_endpo
 print("Maintenance Agent vector store ready.")
 
 SOP_KB_PATHS = {
-    "sop":       "data/sop_procedures.csv",
-    "guides":    "data/troubleshooting_guides.csv",
-    "incidents": "data/incident_resolutions.csv",
-    "manuals":   "data/equipment_manuals.csv",
+    "sop":       str(_ROOT / "data/sop_procedures.csv"),
+    "guides":    str(_ROOT / "data/troubleshooting_guides.csv"),
+    "incidents": str(_ROOT / "data/incident_resolutions.csv"),
+    "manuals":   str(_ROOT / "data/equipment_manuals.csv"),
 }
 sop_store  = build_sop_index(SOP_KB_PATHS)
 sop_client = AzureOpenAI(
@@ -119,7 +123,7 @@ print("SOP Agent vector store ready.")
 
 # ## Cell 4 — Load and prepare data
 
-DATA_PATH = "data/train_machine.csv"
+DATA_PATH = str(_ROOT / "data/train_machine.csv")
 
 data = pd.read_csv(DATA_PATH)
 def to_snake_case(name):
@@ -134,7 +138,7 @@ print(f"Data loaded  : {data.shape[0]} rows, {data.shape[1]} columns")
 
 # Build wafer → lot_id / chamber_id lookup from summary file.
 # Used to enrich fault alerts before passing them to the Quality Agent.
-_summary = pd.read_csv("data/train_summary.csv")
+_summary = pd.read_csv(str(_ROOT / "data/train_summary.csv"))
 WAFER_LOOKUP = _summary.set_index("wafer_id")[["lot_id","chamber_id"]].to_dict("index")
 print(f"Wafers       : {data['wafer_id'].nunique()}")
 print(f"Sensors      : {len(sensor_cols)}")

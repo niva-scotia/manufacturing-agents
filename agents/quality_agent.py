@@ -24,12 +24,13 @@ from pathlib import Path
 from chromadb.api.types import EmbeddingFunction
 
 # Load .env
-load_dotenv(Path(__file__).parent / ".env")
+_ROOT = Path(__file__).parent.parent
+load_dotenv(_ROOT / ".env")
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-QUALITY_RECORDS_PATH = "data/quality_records.csv"
-CHROMA_DB_PATH       = "chroma_db"        # folder where ChromaDB saves vectors
+QUALITY_RECORDS_PATH = str(_ROOT / "data/quality_records.csv")
+CHROMA_DB_PATH       = str(_ROOT / "chroma_db")
 COLLECTION_NAME      = "quality_records"   # name of the collection inside ChromaDB
 EMBEDDING_MODEL      = "text-embedding-3-small" # HuggingFace model for embeddings
 TOP_K                = 5

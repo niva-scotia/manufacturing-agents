@@ -37,16 +37,17 @@ from pathlib import Path
 from chromadb.api.types import EmbeddingFunction
 
 # Load .env
-load_dotenv(Path(__file__).parent / ".env")
+_ROOT = Path(__file__).parent.parent
+load_dotenv(_ROOT / ".env")
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-CMMS_WO_PATH     = "data/cmms_work_orders.csv"
-CMMS_PM_PATH     = "data/cmms_pm_schedule.csv"
-CMMS_PARTS_PATH  = "data/cmms_spare_parts.csv"
-CMMS_CALIB_PATH  = "data/cmms_calibration.csv"
+CMMS_WO_PATH     = str(_ROOT / "data/cmms_work_orders.csv")
+CMMS_PM_PATH     = str(_ROOT / "data/cmms_pm_schedule.csv")
+CMMS_PARTS_PATH  = str(_ROOT / "data/cmms_spare_parts.csv")
+CMMS_CALIB_PATH  = str(_ROOT / "data/cmms_calibration.csv")
 
-CHROMA_DB_PATH   = "chroma_db"           # same folder as the Quality Agent
+CHROMA_DB_PATH   = str(_ROOT / "chroma_db")
 COLLECTION_NAME  = "cmms_work_orders"    # but a SEPARATE collection
 EMBEDDING_MODEL  = "text-embedding-3-small"
 TOP_K            = 5

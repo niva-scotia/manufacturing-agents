@@ -41,18 +41,21 @@ import pandas as pd
 from unittest.mock import MagicMock, patch, call
 from pathlib import Path
 
+_ROOT = Path(__file__).parent
+sys.path.insert(0, str(_ROOT / "agents"))
+
 from dotenv import load_dotenv
-load_dotenv(Path(__file__).parent / ".env")
+load_dotenv(_ROOT / ".env")
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-DATA_DIR             = Path("data")
+DATA_DIR             = _ROOT / "data"
 TRAIN_MACHINE_PATH   = DATA_DIR / "train_machine.csv"
 QUALITY_RECORDS_PATH = DATA_DIR / "quality_records.csv"
 
 # ── Load production agent functions without running the script body ────────────
 
 def _load_production_module():
-    with open("production_agent.py", "r") as f:
+    with open(_ROOT / "agents" / "production_agent.py", "r") as f:
         src = f.read()
 
     start = src.find("def check_anomaly")
@@ -75,10 +78,22 @@ def _load_production_module():
         "}\n"
         "quality_store  = None\n"
         "quality_client = None\n"
+        "wo_store       = None\n"
+        "pm_df          = None\n"
+        "parts_df       = None\n"
+        "calib_df       = None\n"
+        "maintenance_client = None\n"
+        "sop_store      = None\n"
+        "sop_client     = None\n"
         "def get_llm_explanation(event_type, sensor, details):\n"
         "    return f'[mocked: {sensor}]'\n"
         "def run_quality_agent(alert, collection, client):\n"
         "    return '[mocked quality report]'\n"
+        "def run_maintenance_agent(quality_report, wo_collection, pm_df, parts_df, calib_df, client):\n"
+        "    return {'priority': 'LOW', 'sensor': '', 'chamber_id': '', 'alert_type': '', 'component': '', 'pm_status': {}, 'required_parts': [], 'calibration_status': {}, 'past_wo_patterns': '', 'recommended_actions': [], 'draft_wo_header': '', 'llm_narrative': '[mocked]'}\n"
+        "def print_recommendation(rec): pass\n"
+        "def run_sop_agent(alert, quality_report, recommendation, collection, client):\n"
+        "    return '[mocked sop report]'\n"
         + src[start:stop]
     )
 
