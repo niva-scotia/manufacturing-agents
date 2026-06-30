@@ -4,7 +4,7 @@
     {
       "name": "fabwatch-static",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "8777", "--directory", "/Users/verdeseric/Desktop/manufacturing_agents"],
+      "runtimeArgs": ["-m", "http.server", "8777", "--directory", "/Users/verdeseric/Desktop/manufacturing_agents/front_end"],
       "port": 8777
     }
   ]

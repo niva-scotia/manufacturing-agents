@@ -240,6 +240,10 @@
   }
   .modal-x:hover { border-color: var(--red); color: var(--red); }
   .modal-body { padding: 22px; overflow-y: auto; }
+  /* Detail modal: keep it compact — the body itself does not scroll, only the
+     Agent Findings list does. */
+  .modal.detail .modal-body { overflow: hidden; }
+  .findings-scroll { max-height: 260px; overflow-y: auto; }
 
   .badge { font-family: var(--mono); font-size: 11px; font-weight: 700; letter-spacing: 1.6px; padding: 4px 11px; border-radius: 7px; }
   .badge.fault { color: var(--red); border: 1px solid rgba(248,81,73,0.45); background: rgba(248,81,73,0.08); }
@@ -387,58 +391,66 @@
      · quality_agent.py     → defect / release-gate findings (Quality tags)
    Each chamber rolls up its agent findings + current sensor snapshot.
    ════════════════════════════════════════════════════════════════════════ */
-const CHAMBERS = {
-  CHA: {
-    name: 'CHA', status: 'fault', monitored: true,
-    machine: 'Multi-Chamber Etch System', bay: 'BAY 2 · ETCH',
-    chamber: 'PC1', lot: 'LOT-40W48', recipe: 'Metal · M2', wafers: '19/25', uptime: '92h',
-    // current snapshot (hover popup uses the short forms)
-    temp: '68 °C', tempShort: '68.5°C', pressure: '55.1', press: '54.8',
-    rfPower: '1511 W', throughput: '85 wph', rate: '87 wph',
-    modules: ['green', 'green', 'red', 'idle'],
-    findings: [
-      { type: 'anomaly', pc: 'PC2', text: 'Sustained parameter drift crossed upper control limit — fault declared', id: 'ANM-5217', time: '14:36:05' },
-      { type: 'quality', pc: 'PC2', text: 'Defect density 0.81 /cm² — above release gate', id: 'NCR-2685', time: '14:36:07' },
-    ]
+// The dashboard fetches front_end/dashboard_data.json (written by
+// agents/dashboard_export.py from the live production_agent run) and re-polls
+// every few seconds. DEMO is the offline fallback shown when that file isn't
+// reachable (e.g. opened straight off disk via file://).
+const DEMO = {
+  generated_at: null,
+  counts: { fault: 1, watch: 0, ok: 1 },
+  critical: { id: 'ANM-4410', chamber: 'CHA', pc: 'TCP TOP PWR', text: 'TCP TOP PWR +1.00 above max', time: '14:32:46' },
+  chambers: {
+    CHA: {
+      name: 'CHA', status: 'fault', monitored: true,
+      machine: 'Multi-Chamber Etch System', bay: 'BAY 2 · ETCH',
+      chamber: 'CHA', lot: 'LOT_31B', recipe: 'METAL_ETCH_A_V3', wafers: '38/43', oee: '36%', rfHrs: '1241h', workOrder: 'NONE',
+      sensors: [
+        { label: 'TCP TOP PWR', value: '349.5', unit: 'W', status: 'ok' },
+        { label: 'PRESSURE', value: '1261.0', unit: 'mTorr', status: 'watch' },
+        { label: 'RF BTM PWR', value: '133.0', unit: 'W', status: 'ok' },
+        { label: 'BCl3 FLOW', value: '750.0', unit: 'sccm', status: 'ok' },
+      ],
+      modules: ['red', 'yellow', 'green', 'green'],
+      findings: [
+        { type: 'anomaly', pc: 'TCP TOP PWR', text: 'Value 361.00 outside [334–360] — fault declared', id: 'ANM-4408', time: '14:32:42' },
+        { type: 'trend', pc: 'PRESSURE', text: 'PRESSURE rising — breach in 7 seconds (R²=0.94)', id: 'TRD-1101', time: '14:31:40' },
+      ]
+    },
+    CHB: {
+      name: 'CHB', status: 'nominal', monitored: true,
+      machine: 'PECVD Deposition Cluster', bay: 'BAY 3 · DEPOSITION',
+      chamber: 'CHB', lot: 'LOT_31B', recipe: 'METAL_ETCH_A_V3', wafers: '40/43', oee: '41%', rfHrs: '988h', workOrder: 'NONE',
+      sensors: [
+        { label: 'TCP TOP PWR', value: '344.2', unit: 'W', status: 'ok' },
+        { label: 'PRESSURE', value: '1296.0', unit: 'mTorr', status: 'ok' },
+        { label: 'RF BTM PWR', value: '133.0', unit: 'W', status: 'ok' },
+        { label: 'BCl3 FLOW', value: '751.0', unit: 'sccm', status: 'ok' },
+      ],
+      modules: ['green', 'green', 'green', 'green'],
+      findings: []
+    }
   },
-  CHB: {
-    name: 'CHB', status: 'nominal', monitored: true,
-    machine: 'PECVD Deposition Cluster', bay: 'BAY 3 · DEPOSITION',
-    chamber: 'PC1', lot: 'LOT-39X12', recipe: 'TEOS · D4', wafers: '24/25', uptime: '210h',
-    temp: '395 °C', tempShort: '395°C', pressure: '2.10', press: '2.10',
-    rfPower: '900 W', throughput: '110 wph', rate: '110 wph',
-    modules: ['green', 'idle', 'green', 'green'],
-    findings: [
-      { type: 'trend', pc: 'PC1', text: 'Deposition rate rising — 62% of control band, monitoring', id: 'TRD-1180', time: '14:31:40' },
-    ]
-  }
+  errors: [
+    { chamber: 'CHA', pc: 'TCP TOP PWR', type: 'anomaly', text: 'TCP TOP PWR out of range — +1.00 above max', id: 'ANM-4408', time: '14:32:42' },
+    { chamber: 'CHA', pc: 'BCl3 FLOW', type: 'anomaly', text: 'BCl3 FLOW out of range — -15.53 below min', id: 'ANM-4405', time: '14:31:55' },
+  ],
+  trends: [
+    { label: 'CHA · PRESSURE', pct: 60, tone: 'yellow', status: 'rising — monitoring',
+      data: [1196,1195,1198,1196,1195,1197,1211,1261] },
+    { label: 'CHB · PRESSURE', pct: 49, tone: 'green', status: 'rising — monitoring',
+      data: [1201,1199,1200,1202,1201,1203,1217,1296] },
+  ],
+  tools: [
+    { id: 'CHA',     status: 'fault',   monitored: true,  machine: 'Multi-Chamber Etch System', bay: 'BAY 2' },
+    { id: 'EFEM-LP1',status: 'idle',    monitored: false, machine: 'EFEM Load Port',            bay: 'BAY 2' },
+    { id: 'CHB',     status: 'nominal', monitored: true,  machine: 'PECVD Deposition Cluster',  bay: 'BAY 3' },
+    { id: 'MET-1',   status: 'nominal', monitored: false, machine: 'Metrology / CD-SEM',        bay: 'BAY 3' },
+    { id: 'AMHS-S2', status: 'nominal', monitored: false, machine: 'AMHS Stocker',              bay: 'AISLE' },
+    { id: 'WB-2',    status: 'nominal', monitored: false, machine: 'Wet Bench Clean',           bay: 'BAY 3' },
+  ]
 };
 
-const CRITICAL = { id: 'ANM-4410', chamber: 'CHA', pc: 'PC3', text: 'Throughput dropped 22% over last 6 lots', time: '14:32:46' };
-
-const ERRORS = [
-  { chamber: 'CHA', pc: 'PC3', type: 'quality', text: 'Defect density 0.81 /cm² — above release gate', id: 'NCR-2284', time: '14:32:48' },
-  { chamber: 'CHA', pc: 'PC3', type: 'anomaly', text: 'Throughput dropped 22% over last 6 lots',     id: 'ANM-4410', time: '14:32:46' },
-];
-
-const TRENDS = [
-  { label: 'CHA · PC3 pressure', pct: 60, tone: 'green',  status: 'stable',
-    data: [40,42,41,43,42,44,43,45,44,43,45,44,46,45,44,46,45,47,46,45] },
-  { label: 'CHB · PC1 dep rate', pct: 62, tone: 'yellow', status: 'rising — monitoring',
-    data: [22,23,24,23,25,26,27,29,31,33,36,39,42,45,48,52,55,58,61,64] },
-  { label: 'CHA · PC2 RF power', pct: 67, tone: 'yellow', status: 'rising — monitoring',
-    data: [30,31,30,32,33,34,36,38,40,43,46,49,52,55,58,61,64,66,68,70] },
-];
-
-// Top-down plant layout (Live View). Only CHA / CHB are agent-monitored tools.
-const TOOLS = [
-  { id: 'CHA',     status: 'fault',   monitored: true,  machine: 'Multi-Chamber Etch System', bay: 'BAY 2' },
-  { id: 'EFEM-LP1',status: 'idle',    monitored: false, machine: 'EFEM Load Port',            bay: 'BAY 2' },
-  { id: 'CHB',     status: 'nominal', monitored: true,  machine: 'PECVD Deposition Cluster',  bay: 'BAY 3' },
-  { id: 'MET-1',   status: 'nominal', monitored: false, machine: 'Metrology / CD-SEM',        bay: 'BAY 3' },
-  { id: 'AMHS-S2', status: 'nominal', monitored: false, machine: 'AMHS Stocker',              bay: 'AISLE' },
-  { id: 'WB-2',    status: 'nominal', monitored: false, machine: 'Wet Bench Clean',           bay: 'BAY 3' },
-];
+let state = DEMO;
 
 const STATUS_COLOR = { fault: 'var(--red)', nominal: 'var(--green)', watch: 'var(--yellow)', idle: 'var(--muted)' };
 const STATUS_TEXT  = { fault: 'FAULT', nominal: 'NOMINAL', watch: 'WATCH', idle: 'IDLE' };
@@ -518,20 +530,30 @@ function sparkline(data, tone, w, h) {
 
 /* ───────────── RENDER ───────────── */
 function renderCritical() {
-  document.getElementById('critical').innerHTML = `
+  const el = document.getElementById('critical');
+  const c = state.critical;
+  if (!c) { el.style.display = 'none'; return; }
+  el.style.display = 'flex';
+  el.innerHTML = `
     <span class="crit-dot"></span>
     <span class="crit-label">CRITICAL</span>
-    <span class="crit-id">${CRITICAL.id}</span>
-    <span class="crit-ch">${CRITICAL.chamber}</span>
-    <span class="crit-pc">${CRITICAL.pc}</span>
-    <span class="crit-msg">${CRITICAL.text}</span>
-    <span class="crit-time">${CRITICAL.time}</span>`;
+    <span class="crit-id">${c.id}</span>
+    <span class="crit-ch">${c.chamber}</span>
+    <span class="crit-pc">${c.pc}</span>
+    <span class="crit-msg">${c.text}</span>
+    <span class="crit-time">${c.time}</span>`;
+}
+
+function renderCounts() {
+  document.getElementById('cnt-fault').textContent = state.counts.fault;
+  document.getElementById('cnt-watch').textContent = state.counts.watch;
+  document.getElementById('cnt-ok').textContent = state.counts.ok;
 }
 
 function renderChambers() {
-  const order = ['CHA', 'CHB'];
+  const order = Object.keys(state.chambers);
   document.getElementById('floor').innerHTML = order.map((key, i) => {
-    const ch = CHAMBERS[key];
+    const ch = state.chambers[key];
     const card = `
       <div class="chamber ${ch.status}" data-ch="${key}">
         <div class="ch-head">
@@ -557,7 +579,8 @@ function renderChambers() {
 }
 
 function renderErrors() {
-  document.getElementById('errorsList').innerHTML = ERRORS.map(e => `
+  const errors = state.errors || [];
+  document.getElementById('errorsList').innerHTML = errors.map(e => `
     <div class="err-card ${e.type}" data-id="${e.id}" data-ch="${e.chamber}">
       <div class="err-top">
         <span class="err-ch">${e.chamber}</span>
@@ -568,15 +591,15 @@ function renderErrors() {
       <div class="err-desc">${e.text}</div>
       <div class="err-id">${e.id}</div>
     </div>`).join('');
-  document.getElementById('err-red').textContent = ERRORS.length;
-  document.getElementById('err-green').textContent = 0;
+  document.getElementById('err-red').textContent = errors.filter(e => e.type === 'anomaly').length;
+  document.getElementById('err-green').textContent = errors.filter(e => e.type === 'quality').length;
   document.querySelectorAll('.err-card').forEach(el => {
-    el.addEventListener('click', () => { if (CHAMBERS[el.dataset.ch]) openDetail(el.dataset.ch); });
+    el.addEventListener('click', () => { if (state.chambers[el.dataset.ch]) openDetail(el.dataset.ch); });
   });
 }
 
 function renderTrends() {
-  document.getElementById('trendItems').innerHTML = TRENDS.map(t => `
+  document.getElementById('trendItems').innerHTML = (state.trends || []).map(t => `
     <div class="trend-item">
       <div class="trend-top">
         <span class="trend-name">${t.label}</span>
@@ -592,8 +615,10 @@ function renderTrends() {
 /* ───────────── HOVER TOOLTIP ───────────── */
 const tt = document.getElementById('tooltip');
 function showTooltip(key, e) {
-  const ch = CHAMBERS[key];
+  const ch = state.chambers[key];
   const col = STATUS_COLOR[ch.status];
+  const mini = (ch.sensors || []).slice(0, 3).map(s =>
+    `<div class="kv"><label>${s.label}</label><span>${s.value} ${s.unit}</span></div>`).join('');
   tt.innerHTML = `
     <div class="tt-head">
       <span class="tt-name">${ch.name}</span>
@@ -608,11 +633,7 @@ function showTooltip(key, e) {
       <div class="kv"><label>WAFERS</label><span>${ch.wafers}</span></div>
     </div>
     <div class="tt-divider"></div>
-    <div class="tt-grid three">
-      <div class="kv"><label>TEMP</label><span>${ch.tempShort}</span></div>
-      <div class="kv"><label>PRESS</label><span>${ch.press}</span></div>
-      <div class="kv"><label>RATE</label><span>${ch.rate}</span></div>
-    </div>`;
+    <div class="tt-grid three">${mini}</div>`;
   tt.classList.add('show');
   moveTooltip(e);
 }
@@ -639,8 +660,12 @@ backdrop.addEventListener('click', e => { if (e.target === backdrop) closeModal(
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
 function openDetail(key) {
-  const ch = CHAMBERS[key];
+  const ch = state.chambers[key];
+  if (!ch) return;
   const col = STATUS_COLOR[ch.status];
+  const statBoxes = (ch.sensors || []).map(s =>
+    `<div class="stat-box"><label>${s.label}</label><div class="val">${s.value} <span class="unit">${s.unit}</span></div></div>`).join('');
+  const noFindings = !ch.findings || ch.findings.length === 0;
   const findings = ch.findings.map(f => {
     const fc = f.type === 'anomaly' ? 'var(--teal)' : f.type === 'quality' ? 'var(--green)' : 'var(--yellow)';
     const label = f.type === 'anomaly' ? 'Anomaly' : f.type === 'quality' ? 'Quality' : 'Trend';
@@ -673,22 +698,17 @@ function openDetail(key) {
         <div class="kv"><label>LOT</label><span>${ch.lot}</span></div>
         <div class="kv"><label>WAFERS</label><span>${ch.wafers}</span></div>
         <div class="kv"><label>RECIPE</label><span>${ch.recipe}</span></div>
-        <div class="kv"><label>UPTIME</label><span>${ch.uptime}</span></div>
-        <div></div>
+        <div class="kv"><label>OEE</label><span>${ch.oee}</span></div>
+        <div class="kv"><label>WORK ORDER</label><span style="color:${ch.workOrder && ch.workOrder !== 'NONE' ? 'var(--red)' : 'var(--text)'};">${ch.workOrder}</span></div>
       </div>
-      <div class="stat-grid">
-        <div class="stat-box"><label>TEMP</label><div class="val">${ch.temp}</div></div>
-        <div class="stat-box"><label>PRESSURE</label><div class="val">${ch.pressure}</div></div>
-        <div class="stat-box"><label>RF POWER</label><div class="val">${ch.rfPower}</div></div>
-        <div class="stat-box"><label>THROUGHPUT</label><div class="val">${ch.throughput}</div></div>
-      </div>
+      <div class="stat-grid">${statBoxes}</div>
       <div class="findings-label">AGENT FINDINGS</div>
-      ${findings}
+      <div class="findings-scroll">${noFindings ? '<div style="font-family:var(--mono);font-size:11px;color:var(--muted);">No active findings — chamber nominal.</div>' : findings}</div>
     </div>`, 'detail');
 }
 
 function openPlantView() {
-  const cards = TOOLS.map(t => {
+  const cards = (state.tools || []).map(t => {
     const cls = `tool ${t.status}${t.monitored ? ' monitored' : ''}`;
     const col = STATUS_COLOR[t.status];
     return `
@@ -704,7 +724,7 @@ function openPlantView() {
         </div>
       </div>`;
   }).join('');
-  const faults = TOOLS.filter(t => t.monitored && t.status === 'fault').map(t => t.id);
+  const faults = (state.tools || []).filter(t => t.monitored && t.status === 'fault').map(t => t.id);
   openModal(`
     <div class="modal-head">
       <span class="live-dot"></span>
@@ -744,11 +764,38 @@ document.getElementById('soundBtn').addEventListener('click', function() {
   this.textContent = on ? 'SOUND ON' : 'SOUND OFF';
 });
 
+/* ───────────── DATA LOADING ───────────── */
+function renderAll() {
+  renderCounts();
+  renderCritical();
+  renderChambers();
+  renderErrors();
+  renderTrends();
+}
+
+const DATA_URL = 'dashboard_data.json';
+let liveConnected = false;
+
+async function loadData() {
+  try {
+    const res = await fetch(DATA_URL + '?t=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const json = await res.json();
+    if (json && json.chambers) {
+      state = json;
+      liveConnected = true;
+      renderAll();
+    }
+  } catch (err) {
+    // No JSON reachable (e.g. opened via file://) — keep showing DEMO data.
+    if (!liveConnected) console.info('[fabwatch] no live data feed — showing demo data.', err.message);
+  }
+}
+
 /* ───────────── INIT ───────────── */
-renderCritical();
-renderChambers();
-renderErrors();
-renderTrends();
+renderAll();        // paint immediately with DEMO so the page is never blank
+loadData();         // then try to replace it with the live agent feed
+setInterval(loadData, 5000);   // auto-refresh
 </script>
 </body>
 </html>

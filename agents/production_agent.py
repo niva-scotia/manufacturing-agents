@@ -630,6 +630,7 @@ def run_agent(data, thresholds, trend_config, max_rows=None):
                             "r_squared"        : trend["r_squared"],
                             "steps_to_breach"  : trend["steps_to_breach"],
                             "time_to_breach"   : trend["time_to_breach"],   # ← updated
+                            "values_seen"      : trend["values_seen"],      # for dashboard sparkline
                             "explanation"      : explanation,
                         }
                         trend_log.append(trend_entry)
@@ -752,3 +753,15 @@ if trends:
         'current_value', 'trend_direction',
         'rate_per_step', 'r_squared', 'time_to_breach'
     ]].to_string(index=False))
+
+# ## Cell 11 — Export data for the FABWATCH dashboard
+# Maps this run's anomalies + trends (with LLM explanations) and the chamber
+# summary into front_end/dashboard_data.json. The dashboard
+# (front_end/fabwatch_dashboard.html) fetches this file and auto-refreshes,
+# so the UI reflects the agent's real findings.
+try:
+    from dashboard_export import build_payload, write_dashboard_json
+    _payload = build_payload(anomalies, trends, data, _summary, USER_THRESHOLDS)
+    write_dashboard_json(_payload, str(_ROOT / "front_end" / "dashboard_data.json"))
+except Exception as _e:
+    print(f"[dashboard_export] skipped: {_e}")
