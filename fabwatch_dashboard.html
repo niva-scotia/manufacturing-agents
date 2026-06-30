@@ -2,628 +2,753 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FABWATCH — FAB 2 · PHOENIX</title>
 <style>
   :root {
-    --bg: #0d1117;
-    --surface: #161b22;
-    --surface2: #1c2330;
-    --border: #21262d;
-    --border2: #30363d;
-    --text: #e6edf3;
-    --muted: #7d8590;
-    --green: #3fb950;
-    --yellow: #d29922;
-    --red: #f85149;
-    --blue: #58a6ff;
-    --fault-glow: rgba(248,81,73,0.18);
-    --watch-glow: rgba(210,153,34,0.14);
-    font-family: 'SF Mono', 'Consolas', 'Menlo', monospace;
+    --bg:        #05080f;
+    --panel:     #0a1020;
+    --panel2:    #0b1322;
+    --card:      #0c1426;
+    --card2:     #0e1830;
+    --border:    rgba(120,140,180,0.12);
+    --border2:   rgba(120,140,180,0.22);
+    --text:      #dce4f0;
+    --text2:     #aeb9cc;
+    --muted:     #5d6b85;
+    --muted2:    #44516b;
+    --teal:      #5eead4;
+    --teal-dim:  #2dd4bf;
+    --green:     #34d399;
+    --red:       #f87171;
+    --red-hot:   #fb5b5b;
+    --yellow:    #fbbf24;
+    --blue:      #4f8ff7;
+    --mono: 'SF Mono','JetBrains Mono','Menlo','Consolas',monospace;
+    --sans: -apple-system, 'Inter', 'Segoe UI', system-ui, sans-serif;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: var(--bg); color: var(--text); font-size: 11px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-
-  /* HEADER */
-  .header { display: flex; align-items: center; gap: 12px; padding: 0 14px; height: 44px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
-  .logo-block { display: flex; align-items: center; gap: 8px; margin-right: 4px; }
-  .logo-badge { background: var(--blue); color: #fff; font-weight: 700; font-size: 12px; padding: 2px 6px; border-radius: 3px; letter-spacing: 1px; }
-  .logo-name { font-weight: 700; font-size: 13px; letter-spacing: 1.5px; color: var(--text); }
-  .logo-sub { font-size: 9px; color: var(--muted); letter-spacing: 1px; }
-  .pipeline { display: flex; align-items: center; gap: 6px; background: var(--surface2); border: 1px solid var(--border2); border-radius: 4px; padding: 4px 10px; margin-left: 8px; }
-  .pipe-stage { font-size: 9px; font-weight: 600; letter-spacing: 1.2px; color: var(--blue); }
-  .pipe-stage.active { color: var(--text); }
-  .pipe-arrow { color: var(--muted); font-size: 10px; }
-  .hspacer { flex: 1; }
-  .fault-counts { display: flex; gap: 14px; align-items: center; }
-  .fc { display: flex; align-items: center; gap: 5px; font-size: 10px; letter-spacing: 0.8px; }
-  .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
-  .dot.red { background: var(--red); box-shadow: 0 0 5px var(--red); }
-  .dot.yellow { background: var(--yellow); box-shadow: 0 0 5px var(--yellow); }
-  .dot.green { background: var(--green); }
-  .clock { font-size: 11px; color: var(--text); letter-spacing: 1px; margin: 0 6px; }
-  .btn { background: var(--surface2); border: 1px solid var(--border2); color: var(--muted); font-size: 9px; font-family: inherit; letter-spacing: 1px; padding: 4px 10px; border-radius: 3px; cursor: pointer; }
-  .btn.active { color: var(--text); border-color: var(--blue); }
-  .divider { width: 1px; height: 20px; background: var(--border2); }
-
-  /* MAIN */
-  .main { display: flex; flex: 1; min-height: 0; }
-
-  /* PLANT FLOOR */
-  .plant { flex: 1; min-width: 0; display: flex; flex-direction: column; border-right: 1px solid var(--border); overflow: hidden; }
-  .plant-header { display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-  .plant-title { font-size: 10px; font-weight: 700; letter-spacing: 1.5px; }
-  .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 2s infinite; }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
-  .plant-legend { display: flex; gap: 12px; margin-left: auto; }
-  .leg { display: flex; align-items: center; gap: 4px; font-size: 9px; color: var(--muted); letter-spacing: 0.8px; }
-  .plant-sub { padding: 5px 14px; font-size: 9px; color: var(--muted); letter-spacing: 0.8px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-  .chambers { display: flex; gap: 12px; padding: 12px 14px; flex: 1; min-height: 0; overflow: hidden; }
-
-  /* CHAMBER CARD */
-  .chamber-card {
-    flex: 1; border-radius: 6px; border: 1.5px solid var(--border2);
-    background: var(--surface2); padding: 12px; display: flex; flex-direction: column;
-    cursor: pointer; transition: border-color 0.2s, box-shadow 0.2s;
-    min-width: 0;
+  html, body { height: 100%; }
+  body {
+    background: var(--bg); color: var(--text); font-family: var(--sans);
+    font-size: 13px; height: 100vh; display: flex; flex-direction: column;
+    overflow: hidden; -webkit-font-smoothing: antialiased;
   }
-  .chamber-card:hover { border-color: var(--blue); }
-  .chamber-card.fault { border-color: var(--red); box-shadow: 0 0 20px var(--fault-glow), inset 0 0 30px var(--fault-glow); }
-  .chamber-card.watch { border-color: var(--yellow); box-shadow: 0 0 14px var(--watch-glow); }
-  .chamber-card.selected { border-color: var(--blue); box-shadow: 0 0 14px rgba(88,166,255,0.15); }
-  .ch-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
-  .ch-name { font-size: 16px; font-weight: 700; letter-spacing: 1px; }
-  .ch-dot { width: 9px; height: 9px; border-radius: 50%; }
-  .ch-dot.green { background: var(--green); box-shadow: 0 0 6px var(--green); }
-  .ch-dot.red { background: var(--red); box-shadow: 0 0 8px var(--red); animation: pulse 1.5s infinite; }
-  .ch-dot.yellow { background: var(--yellow); box-shadow: 0 0 6px var(--yellow); }
-  .ch-status-badge { font-size: 9px; font-weight: 600; letter-spacing: 1.2px; }
-  .ch-status-badge.fault { color: var(--red); }
-  .ch-status-badge.watch { color: var(--yellow); }
-  .ch-status-badge.nominal { color: var(--green); }
-  .ch-diagram { height: 148px; flex: none; display: flex; align-items: center; justify-content: center; }
-  .ch-footer { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 6px; }
-  .ch-label { font-size: 9px; color: var(--muted); letter-spacing: 0.8px; }
-  .ch-bay { font-size: 8px; color: var(--muted); letter-spacing: 0.8px; }
-  .service-aisle { writing-mode: vertical-rl; font-size: 7px; color: var(--border2); letter-spacing: 2px; align-self: center; padding: 0 2px; }
+  .mono { font-family: var(--mono); }
+  .upper { text-transform: uppercase; letter-spacing: 1.4px; }
 
-  /* SIDEBAR */
-  .sidebar { width: 310px; flex-shrink: 0; display: flex; flex-direction: column; overflow: hidden; }
+  /* ───────────── HEADER ───────────── */
+  .header {
+    display: flex; align-items: center; gap: 16px; padding: 0 18px; height: 56px;
+    flex-shrink: 0; border-bottom: 1px solid var(--border); background: rgba(8,12,22,0.6);
+  }
+  .logo-block { display: flex; align-items: center; gap: 11px; }
+  .logo-badge {
+    width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center;
+    justify-content: center; font-family: var(--mono); font-weight: 700; font-size: 13px;
+    color: #fff; background: linear-gradient(150deg, #3b82f6, #22d3ee);
+    box-shadow: 0 0 16px rgba(34,211,238,0.35);
+  }
+  .logo-name { font-weight: 700; font-size: 16px; letter-spacing: 1px; }
+  .logo-sub { font-family: var(--mono); font-size: 9.5px; color: var(--muted); letter-spacing: 1.5px; margin-top: 1px; }
 
-  /* INCOMING ERRORS */
-  .panel { display: flex; flex-direction: column; border-bottom: 1px solid var(--border); }
-  .panel-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-  .panel-title { font-size: 10px; font-weight: 700; letter-spacing: 1.2px; }
-  .count-badge { background: var(--red); color: #fff; font-size: 9px; font-weight: 700; width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
-  .errors-list { overflow-y: auto; max-height: 380px; }
-  .error-item { padding: 8px 12px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.15s; display: flex; flex-direction: column; gap: 3px; }
-  .error-item:hover { background: var(--surface2); }
-  .error-item.anomaly { border-left: 2px solid var(--red); }
-  .error-item.trend { border-left: 2px solid var(--yellow); }
-  .error-top { display: flex; align-items: center; gap: 6px; justify-content: space-between; }
-  .error-chamber { font-size: 9px; font-weight: 700; color: var(--text); }
-  .tag { font-size: 8px; padding: 1px 5px; border-radius: 2px; font-weight: 600; letter-spacing: 0.5px; }
-  .tag.anomaly { background: rgba(248,81,73,0.15); color: var(--red); border: 1px solid rgba(248,81,73,0.3); }
-  .tag.trend { background: rgba(210,153,34,0.15); color: var(--yellow); border: 1px solid rgba(210,153,34,0.3); }
-  .error-time { font-size: 8px; color: var(--muted); }
-  .error-desc { font-size: 10px; color: var(--text); }
-  .error-id { font-size: 8px; color: var(--muted); letter-spacing: 0.5px; }
+  .pipeline { display: flex; align-items: center; gap: 9px; margin-left: 10px; }
+  .pipe-pill {
+    font-family: var(--mono); font-size: 9.5px; font-weight: 600; letter-spacing: 1.6px;
+    color: var(--text2); border: 1px solid var(--border2); border-radius: 8px; padding: 7px 13px;
+    background: rgba(255,255,255,0.015);
+  }
+  .pipe-pill.dim { color: var(--muted); }
+  .pipe-arrow { color: var(--muted2); font-size: 13px; }
 
-  /* MACHINE DETAIL */
-  .detail-panel { flex: 1; overflow-y: auto; min-height: 0; }
-  .fault-tag { display: inline-block; background: rgba(248,81,73,0.15); color: var(--red); border: 1px solid rgba(248,81,73,0.3); font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 2px; letter-spacing: 0.8px; margin-left: 6px; }
-  .watch-tag { display: inline-block; background: rgba(210,153,34,0.15); color: var(--yellow); border: 1px solid rgba(210,153,34,0.3); font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 2px; letter-spacing: 0.8px; margin-left: 6px; }
-  .meta-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
-  .meta-item label { font-size: 8px; color: var(--muted); letter-spacing: 0.8px; display: block; margin-bottom: 2px; }
-  .meta-item span { font-size: 10px; color: var(--text); }
-  .sensor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--border); }
-  .sensor-box { background: var(--surface); border: 1px solid var(--border2); border-radius: 4px; padding: 8px; }
-  .sensor-box.fault { border-color: rgba(248,81,73,0.4); background: rgba(248,81,73,0.05); }
-  .sensor-box.watch { border-color: rgba(210,153,34,0.4); background: rgba(210,153,34,0.05); }
-  .sensor-label { font-size: 8px; color: var(--muted); letter-spacing: 0.8px; margin-bottom: 3px; }
-  .sensor-value { font-size: 16px; font-weight: 600; color: var(--text); }
-  .sensor-value.fault { color: var(--red); }
-  .sensor-value.watch { color: var(--yellow); }
-  .sensor-unit { font-size: 9px; color: var(--muted); }
-  .findings { padding: 8px 12px; }
-  .findings-label { font-size: 9px; color: var(--muted); letter-spacing: 1px; margin-bottom: 6px; font-weight: 600; }
-  .finding-item { display: flex; gap: 6px; margin-bottom: 6px; align-items: flex-start; }
-  .finding-text { font-size: 9px; color: var(--text); line-height: 1.4; }
+  .hspacer { flex: 1; }
+  .counts { display: flex; align-items: center; gap: 18px; }
+  .count { display: flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: 11px; letter-spacing: 1px; color: var(--text2); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+  .dot.red { background: var(--red); box-shadow: 0 0 7px var(--red); }
+  .dot.yellow { background: var(--yellow); box-shadow: 0 0 7px var(--yellow); }
+  .dot.green { background: var(--green); box-shadow: 0 0 7px var(--green); }
+  .dot.grey { background: #3a465e; }
+  .vbar { width: 1px; height: 22px; background: var(--border2); }
+  .clock { font-family: var(--mono); font-size: 14px; letter-spacing: 1.5px; color: var(--text); min-width: 78px; text-align: center; }
+  .btn {
+    font-family: var(--mono); font-size: 10px; font-weight: 600; letter-spacing: 1.6px;
+    color: var(--text2); background: rgba(255,255,255,0.02); border: 1px solid var(--border2);
+    border-radius: 9px; padding: 9px 15px; cursor: pointer; transition: all 0.15s;
+  }
+  .btn:hover { border-color: var(--teal); color: var(--text); }
+  .btn.on { color: var(--teal); border-color: rgba(94,234,212,0.5); background: rgba(94,234,212,0.06); }
 
-  /* TREND WATCH */
-  .trend-bar { height: 116px; background: var(--surface); border-top: 1px solid var(--border); flex-shrink: 0; display: flex; align-items: stretch; overflow: hidden; }
-  .trend-label-block { padding: 0 14px; display: flex; flex-direction: column; justify-content: center; gap: 4px; border-right: 1px solid var(--border); min-width: 140px; }
-  .trend-title { font-size: 9px; font-weight: 700; letter-spacing: 1.2px; color: var(--muted); }
-  .trend-items { display: flex; flex: 1; overflow-x: auto; }
-  .trend-item { flex: 1; min-width: 200px; padding: 10px 14px; border-right: 1px solid var(--border); display: flex; flex-direction: column; justify-content: space-between; gap: 4px; }
-  .trend-top { display: flex; align-items: center; justify-content: space-between; }
-  .trend-name { font-size: 10px; font-weight: 600; letter-spacing: 0.5px; }
-  .trend-pct { font-size: 14px; font-weight: 700; }
-  .trend-pct.red { color: var(--red); }
-  .trend-pct.yellow { color: var(--yellow); }
+  /* ───────────── CRITICAL BAR ───────────── */
+  .critical {
+    display: flex; align-items: center; gap: 14px; padding: 11px 20px; flex-shrink: 0;
+    background: linear-gradient(90deg, rgba(248,81,73,0.16), rgba(248,81,73,0.04) 55%, rgba(248,81,73,0));
+    border-bottom: 1px solid rgba(248,81,73,0.25); border-top: 1px solid rgba(248,81,73,0.18);
+    font-family: var(--mono); font-size: 12px;
+  }
+  .crit-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--red); box-shadow: 0 0 10px var(--red); animation: pulse 1.6s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
+  .crit-label { color: var(--red-hot); font-weight: 700; letter-spacing: 2px; }
+  .crit-id { color: var(--muted); }
+  .crit-ch { color: var(--text); font-weight: 700; }
+  .crit-pc { color: var(--muted); }
+  .crit-msg { color: var(--text); font-family: var(--sans); font-size: 13.5px; }
+  .crit-time { margin-left: auto; color: var(--muted); }
+
+  /* ───────────── BODY GRID ───────────── */
+  .body {
+    flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 372px;
+    grid-template-rows: 1fr auto; gap: 14px; padding: 14px;
+  }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+  .plant  { grid-column: 1; grid-row: 1; }
+  .trend  { grid-column: 1; grid-row: 2; }
+  .errors { grid-column: 2; grid-row: 1 / span 2; }
+
+  /* ───────────── PLANT FLOOR ───────────── */
+  .plant-head { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 13px 18px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .ph-left { display: flex; align-items: center; gap: 9px; }
+  .ph-title { font-family: var(--mono); font-weight: 700; font-size: 12px; letter-spacing: 1.8px; }
+  .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 7px var(--green); animation: pulse 2.4s infinite; }
+  .live-txt { font-family: var(--mono); font-size: 10px; letter-spacing: 1.4px; color: var(--green); }
+  .plant-view-btn {
+    display: flex; align-items: center; gap: 9px; justify-self: center;
+    font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: 1.8px;
+    color: var(--teal); background: rgba(94,234,212,0.05); border: 1px solid rgba(94,234,212,0.35);
+    border-radius: 10px; padding: 9px 16px; cursor: pointer; transition: all 0.15s;
+  }
+  .plant-view-btn:hover { background: rgba(94,234,212,0.12); border-color: var(--teal); }
+  .pv-ico { display: grid; grid-template-columns: 1fr 1fr; gap: 2.5px; }
+  .pv-ico i { width: 5px; height: 5px; border-radius: 1.5px; background: var(--teal); display: block; }
+  .legend { display: flex; gap: 15px; justify-self: end; }
+  .leg { display: flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 9.5px; letter-spacing: 1.2px; color: var(--muted); }
+
+  .plant-sub { font-family: var(--mono); font-size: 10px; letter-spacing: 1.4px; color: var(--muted2); padding: 9px 18px 0; flex-shrink: 0; }
+  .floor {
+    flex: 1; min-height: 0; display: flex; align-items: stretch; gap: 0; padding: 14px 18px 18px;
+    background-image: radial-gradient(circle, rgba(255,255,255,0.035) 1px, transparent 1px);
+    background-size: 24px 24px; background-position: 10px 10px;
+  }
+
+  .chamber {
+    flex: 1; min-width: 0; border-radius: 16px; border: 1.5px solid var(--border2);
+    background: linear-gradient(180deg, rgba(255,255,255,0.012), rgba(0,0,0,0.12));
+    padding: 20px; display: flex; flex-direction: column; cursor: pointer;
+    transition: border-color 0.2s, box-shadow 0.2s, transform 0.12s;
+  }
+  .chamber:hover { transform: translateY(-2px); }
+  .chamber.fault   { border-color: var(--red); box-shadow: 0 0 28px rgba(248,81,73,0.22), inset 0 0 40px rgba(248,81,73,0.05); }
+  .chamber.nominal { border-color: rgba(94,234,212,0.55); box-shadow: 0 0 22px rgba(94,234,212,0.10); }
+  .chamber.watch   { border-color: var(--yellow); box-shadow: 0 0 22px rgba(251,191,36,0.14); }
+  .ch-head { display: flex; align-items: center; justify-content: space-between; }
+  .ch-name { display: flex; align-items: center; gap: 11px; font-family: var(--mono); font-size: 26px; font-weight: 700; letter-spacing: 1px; }
+  .ch-name .dot { width: 11px; height: 11px; }
+  .ch-status { font-family: var(--mono); font-size: 12px; font-weight: 700; letter-spacing: 2px; }
+  .ch-status.fault { color: var(--red); }
+  .ch-status.nominal { color: var(--green); }
+  .ch-status.watch { color: var(--yellow); }
+  .ch-diagram { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 8px 0; }
+  .ch-diagram svg { width: 100%; height: 100%; max-height: 340px; }
+  .ch-foot { display: flex; align-items: flex-end; justify-content: space-between; }
+  .ch-machine { font-size: 14px; color: var(--text2); }
+  .ch-bay { font-family: var(--mono); font-size: 10px; letter-spacing: 1.4px; color: var(--muted); }
+
+  .aisle { width: 40px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; position: relative; }
+  .aisle::before { content: ''; position: absolute; top: 14px; bottom: 14px; width: 1px; border-left: 1px dashed var(--border2); }
+  .aisle span { writing-mode: vertical-rl; font-family: var(--mono); font-size: 8.5px; letter-spacing: 3px; color: var(--muted2); background: var(--panel); padding: 8px 0; }
+
+  /* ───────────── INCOMING ERRORS ───────────── */
+  .errors-head { display: flex; align-items: center; gap: 9px; padding: 14px 18px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .errors-title { font-family: var(--mono); font-weight: 700; font-size: 12px; letter-spacing: 1.8px; }
+  .err-counts { margin-left: auto; display: flex; gap: 12px; }
+  .err-count { display: flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11px; color: var(--text2); }
+  .errors-list { flex: 1; min-height: 0; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 11px; }
+  .err-card {
+    border: 1px solid var(--border); border-left: 3px solid var(--yellow); border-radius: 11px;
+    background: var(--card); padding: 13px 15px; cursor: pointer; transition: all 0.15s;
+  }
+  .err-card:hover { background: var(--card2); border-color: var(--border2); }
+  .err-card.anomaly { border-left-color: var(--yellow); }
+  .err-card.quality { border-left-color: var(--yellow); }
+  .err-top { display: flex; align-items: center; gap: 8px; }
+  .err-ch { font-family: var(--mono); font-weight: 700; font-size: 12px; letter-spacing: 1px; }
+  .err-pc { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: 1px; }
+  .err-time { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--muted); }
+  .tag { font-family: var(--mono); font-size: 9.5px; font-weight: 600; letter-spacing: 0.8px; padding: 3px 8px; border-radius: 6px; }
+  .tag.anomaly { color: var(--teal); border: 1px solid rgba(94,234,212,0.4); background: rgba(94,234,212,0.07); }
+  .tag.quality { color: var(--green); border: 1px solid rgba(52,211,153,0.4); background: rgba(52,211,153,0.07); }
+  .tag.trend   { color: var(--yellow); border: 1px solid rgba(251,191,36,0.4); background: rgba(251,191,36,0.07); }
+  .err-desc { font-size: 13.5px; color: var(--text); margin: 9px 0 7px; line-height: 1.45; }
+  .err-id { font-family: var(--mono); font-size: 10px; letter-spacing: 1px; color: var(--muted); }
+
+  /* ───────────── TREND WATCH ───────────── */
+  .trend { flex-direction: row; align-items: stretch; }
+  .trend-label { display: flex; flex-direction: column; justify-content: center; gap: 9px; padding: 0 20px; border-right: 1px solid var(--border); min-width: 170px; flex-shrink: 0; }
+  .trend-title { font-family: var(--mono); font-weight: 700; font-size: 11px; letter-spacing: 1.6px; color: var(--text2); }
+  .trend-agent { font-family: var(--mono); font-size: 8.5px; letter-spacing: 1.4px; color: var(--teal); border: 1px solid rgba(94,234,212,0.3); border-radius: 6px; padding: 4px 8px; align-self: flex-start; }
+  .trend-items { display: flex; flex: 1; min-width: 0; }
+  .trend-item { flex: 1; min-width: 0; padding: 16px 22px; border-right: 1px solid var(--border); display: flex; flex-direction: column; justify-content: center; gap: 9px; }
+  .trend-item:last-child { border-right: none; }
+  .trend-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .trend-name { font-family: var(--mono); font-size: 12px; color: var(--text2); letter-spacing: 0.5px; }
+  .trend-pct { font-family: var(--mono); font-size: 19px; font-weight: 700; }
   .trend-pct.green { color: var(--green); }
-  .trend-sparkline { height: 44px; }
-  .trend-mid { display: flex; gap: 12px; }
-  .trend-stat { display: flex; flex-direction: column; gap: 1px; }
-  .trend-stat-label { font-size: 7px; color: var(--muted); letter-spacing: 0.8px; }
-  .trend-stat-val { font-size: 10px; color: var(--text); }
-  .trend-bottom { display: flex; align-items: center; justify-content: space-between; }
-  .trend-desc { font-size: 8px; color: var(--muted); }
-  .trend-agent-badge { font-size: 7px; background: var(--surface2); border: 1px solid var(--border2); padding: 1px 4px; border-radius: 2px; color: var(--muted); }
+  .trend-pct.yellow { color: var(--yellow); }
+  .trend-pct.red { color: var(--red); }
+  .trend-spark { display: flex; align-items: center; gap: 12px; }
+  .trend-spark svg { flex-shrink: 0; }
+  .trend-status { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: 0.5px; }
 
-  ::-webkit-scrollbar { width: 4px; }
+  /* ───────────── HOVER TOOLTIP ───────────── */
+  .tooltip {
+    position: fixed; z-index: 60; width: 290px; pointer-events: none; opacity: 0;
+    transform: translateY(6px); transition: opacity 0.13s, transform 0.13s;
+    background: rgba(12,20,38,0.97); border: 1px solid rgba(94,234,212,0.4); border-radius: 13px;
+    box-shadow: 0 18px 48px rgba(0,0,0,0.6); backdrop-filter: blur(8px); padding: 16px;
+  }
+  .tooltip.show { opacity: 1; transform: translateY(0); }
+  .tt-head { display: flex; align-items: center; gap: 9px; }
+  .tt-name { font-family: var(--mono); font-weight: 700; font-size: 16px; letter-spacing: 1px; }
+  .tt-status { font-family: var(--mono); font-size: 11px; font-weight: 700; letter-spacing: 1.6px; }
+  .tt-machine { font-size: 12.5px; color: var(--muted); margin: 5px 0 13px; }
+  .tt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 11px 16px; }
+  .tt-grid.three { grid-template-columns: 1fr 1fr 1fr; }
+  .kv label { display: block; font-family: var(--mono); font-size: 8.5px; letter-spacing: 1.2px; color: var(--muted); margin-bottom: 3px; }
+  .kv span { font-family: var(--mono); font-size: 13px; color: var(--text); }
+  .tt-divider { height: 1px; background: var(--border); margin: 13px 0; }
+
+  /* ───────────── MODALS ───────────── */
+  .backdrop {
+    position: fixed; inset: 0; z-index: 80; display: none; align-items: center; justify-content: center;
+    background: rgba(3,6,12,0.72); backdrop-filter: blur(5px); padding: 30px;
+  }
+  .backdrop.show { display: flex; }
+  .modal {
+    background: #0b1322;
+    border: 1px solid var(--border2); border-radius: 18px; box-shadow: 0 30px 90px rgba(0,0,0,0.7);
+    max-height: 100%; overflow: hidden; display: flex; flex-direction: column;
+  }
+  .modal.detail { width: 640px; }
+  .modal.plant  { width: min(1180px, 100%); }
+  .modal-head { display: flex; align-items: center; gap: 11px; padding: 18px 22px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .modal-title { font-family: var(--mono); font-weight: 700; font-size: 13px; letter-spacing: 2px; }
+  .modal-sub { font-family: var(--mono); font-size: 11px; letter-spacing: 1.4px; color: var(--muted); }
+  .modal-x {
+    margin-left: auto; width: 32px; height: 32px; border-radius: 9px; border: 1px solid var(--border2);
+    background: rgba(255,255,255,0.02); color: var(--text2); cursor: pointer; font-size: 16px;
+    display: flex; align-items: center; justify-content: center; transition: all 0.15s;
+  }
+  .modal-x:hover { border-color: var(--red); color: var(--red); }
+  .modal-body { padding: 22px; overflow-y: auto; }
+
+  .badge { font-family: var(--mono); font-size: 11px; font-weight: 700; letter-spacing: 1.6px; padding: 4px 11px; border-radius: 7px; }
+  .badge.fault { color: var(--red); border: 1px solid rgba(248,81,73,0.45); background: rgba(248,81,73,0.08); }
+  .badge.nominal { color: var(--green); border: 1px solid rgba(52,211,153,0.45); background: rgba(52,211,153,0.08); }
+  .badge.watch { color: var(--yellow); border: 1px solid rgba(251,191,36,0.45); background: rgba(251,191,36,0.08); }
+
+  .md-title { display: flex; align-items: center; gap: 13px; }
+  .md-name { font-family: var(--mono); font-size: 24px; font-weight: 700; letter-spacing: 1px; }
+  .md-machine { font-size: 13.5px; color: var(--muted); margin: 6px 0 20px; }
+  .md-meta { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px 18px; margin-bottom: 20px; }
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; margin-bottom: 24px; }
+  .stat-box { border: 1px solid var(--border); border-radius: 12px; background: var(--card); padding: 15px 17px; }
+  .stat-box label { display: block; font-family: var(--mono); font-size: 9px; letter-spacing: 1.4px; color: var(--muted); margin-bottom: 8px; }
+  .stat-box .val { font-family: var(--mono); font-size: 24px; font-weight: 700; color: var(--text); }
+  .stat-box .unit { font-size: 13px; color: var(--muted); font-weight: 400; }
+  .findings-label { font-family: var(--mono); font-size: 11px; letter-spacing: 1.6px; color: var(--muted); margin-bottom: 14px; }
+  .finding { display: grid; grid-template-columns: auto 1fr auto; gap: 10px 12px; align-items: start; padding: 13px 0; border-top: 1px solid var(--border); }
+  .finding:first-of-type { border-top: none; }
+  .finding .fdot { width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; }
+  .finding-top { display: flex; align-items: center; gap: 9px; }
+  .finding-pc { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: 1px; }
+  .finding-time { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+  .finding-desc { grid-column: 2 / 4; font-size: 13.5px; color: var(--text); line-height: 1.45; margin-top: -2px; }
+  .finding-id { grid-column: 2 / 4; font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 1px; margin-top: 5px; }
+
+  /* PLANT VIEW modal */
+  .pv-sub { font-family: var(--mono); font-size: 10.5px; letter-spacing: 1.6px; color: var(--muted2); margin-bottom: 26px; }
+  .pv-grid { position: relative; display: grid; grid-template-columns: repeat(3, 1fr); gap: 60px 44px; }
+  .pv-track { position: absolute; left: 6%; right: 6%; top: 50%; height: 1px; background: var(--border2); }
+  .pv-track i { position: absolute; top: -3px; width: 7px; height: 7px; border-radius: 50%; background: #2c3a57; }
+  .tool {
+    position: relative; border: 1px solid var(--border2); border-radius: 14px; background: rgba(255,255,255,0.012);
+    padding: 18px; display: flex; flex-direction: column; gap: 13px; z-index: 1;
+  }
+  .tool.monitored { cursor: pointer; transition: transform 0.12s, box-shadow 0.2s; }
+  .tool.monitored:hover { transform: translateY(-2px); }
+  .tool.fault   { border-color: var(--red); box-shadow: 0 0 24px rgba(248,81,73,0.2); background: rgba(248,81,73,0.04); }
+  .tool.nominal.monitored { border-color: rgba(94,234,212,0.5); box-shadow: 0 0 16px rgba(94,234,212,0.08); }
+  .tool-head { display: flex; align-items: center; justify-content: space-between; }
+  .tool-name { display: flex; align-items: center; gap: 9px; font-family: var(--mono); font-weight: 700; font-size: 16px; letter-spacing: 1px; }
+  .tool-status { font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: 1.6px; }
+  .tool-status.fault { color: var(--red); }
+  .tool-status.nominal { color: var(--green); }
+  .tool-status.idle { color: var(--muted); }
+  .tool-icon { display: flex; justify-content: center; padding: 4px 0; }
+  .tool-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .tool-machine { font-size: 12.5px; color: var(--text2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tool-bay { font-family: var(--mono); font-size: 9.5px; letter-spacing: 1.4px; color: var(--muted); flex-shrink: 0; }
+  .pv-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--border); font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: 0.8px; }
+
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
 </style>
 </head>
 <body>
 
+<!-- HEADER -->
 <div class="header">
   <div class="logo-block">
-    <div class="logo-badge">F2</div>
+    <div class="logo-badge mono">F2</div>
     <div>
       <div class="logo-name">FABWATCH</div>
       <div class="logo-sub">FAB 2 · PHOENIX</div>
     </div>
   </div>
   <div class="pipeline">
-    <span class="pipe-stage active">ANOMALY + TREND</span>
+    <span class="pipe-pill">ANOMALY + TREND</span>
     <span class="pipe-arrow">→</span>
-    <span class="pipe-stage">QUALITY</span>
+    <span class="pipe-pill dim">QUALITY</span>
   </div>
   <div class="hspacer"></div>
-  <div class="fault-counts">
-    <div class="fc"><span class="dot red"></span> <span id="cnt-fault">2</span> FAULT</div>
-    <div class="fc"><span class="dot yellow"></span> <span id="cnt-watch">2</span> WATCH</div>
-    <div class="fc"><span class="dot green"></span> <span id="cnt-ok">0</span> OK</div>
+  <div class="counts">
+    <div class="count"><span class="dot red"></span> <b id="cnt-fault">1</b>&nbsp;FAULT</div>
+    <div class="count"><span class="dot yellow"></span> <b id="cnt-watch">0</b>&nbsp;WATCH</div>
+    <div class="count"><span class="dot green"></span> <b id="cnt-ok">1</b>&nbsp;OK</div>
   </div>
-  <div class="divider"></div>
+  <div class="vbar"></div>
   <div class="clock" id="clock">--:--:--</div>
   <button class="btn" id="pauseBtn">PAUSE</button>
-  <button class="btn active" id="soundBtn">SOUND ON</button>
+  <button class="btn on" id="soundBtn">SOUND ON</button>
 </div>
 
-<div class="main">
-  <div class="plant">
-    <div class="plant-header">
-      <div class="plant-title">PLANT FLOOR</div>
-      <div class="live-dot"></div>
-      <span style="font-size:9px;color:var(--green);letter-spacing:0.8px;">LIVE</span>
-      <div class="plant-legend">
-        <div class="leg"><span class="dot" style="background:var(--green);"></span> NOMINAL</div>
-        <div class="leg"><span class="dot" style="background:var(--yellow);"></span> WATCH</div>
-        <div class="leg"><span class="dot" style="background:var(--red);"></span> FAULT</div>
-        <div class="leg"><span class="dot" style="background:var(--border2);"></span> IDLE</div>
+<!-- CRITICAL BAR -->
+<div class="critical" id="critical"></div>
+
+<!-- BODY -->
+<div class="body">
+  <!-- PLANT FLOOR -->
+  <div class="panel plant">
+    <div class="plant-head">
+      <div class="ph-left">
+        <span class="ph-title">PLANT FLOOR</span>
+        <span class="live-dot"></span>
+        <span class="live-txt">LIVE</span>
+      </div>
+      <button class="plant-view-btn" id="plantViewBtn">
+        <span class="pv-ico"><i></i><i></i><i></i><i></i></span>
+        PLANT VIEW
+      </button>
+      <div class="legend">
+        <span class="leg"><span class="dot green"></span> NOMINAL</span>
+        <span class="leg"><span class="dot yellow"></span> WATCH</span>
+        <span class="leg"><span class="dot red"></span> FAULT</span>
+        <span class="leg"><span class="dot grey"></span> IDLE</span>
       </div>
     </div>
     <div class="plant-sub">FAB 2 · DRY PROCESS FLOOR</div>
-    <div class="chambers">
-      <!-- CHA -->
-      <div class="chamber-card watch" id="card-CHA" onclick="selectChamber('CHA')">
-        <div class="ch-header">
-          <span class="ch-name">CHA <span class="ch-dot yellow" style="display:inline-block;vertical-align:middle;margin-left:4px;"></span></span>
-          <span class="ch-status-badge watch">WATCH</span>
-        </div>
-        <div class="ch-diagram">
-          <svg viewBox="0 0 230 148" width="100%" height="100%">
-            <!-- Slit valve connections (drawn behind modules) -->
-            <line x1="59" y1="34" x2="97" y2="54" stroke="#21262d" stroke-width="2.5" stroke-linecap="round"/>
-            <line x1="171" y1="34" x2="133" y2="54" stroke="#21262d" stroke-width="2.5" stroke-linecap="round"/>
-            <line x1="42" y1="75" x2="82" y2="75" stroke="#21262d" stroke-width="2.5" stroke-linecap="round"/>
-            <line x1="148" y1="75" x2="188" y2="75" stroke="#21262d" stroke-width="2.5" stroke-linecap="round"/>
-            <line x1="99" y1="96" x2="93" y2="108" stroke="#21262d" stroke-width="2" stroke-linecap="round"/>
-            <line x1="131" y1="96" x2="137" y2="108" stroke="#21262d" stroke-width="2" stroke-linecap="round"/>
-            <line x1="93" y1="124" x2="87" y2="130" stroke="#21262d" stroke-width="1.5"/>
-            <line x1="137" y1="124" x2="143" y2="130" stroke="#21262d" stroke-width="1.5"/>
-            <!-- PM1 top-left nominal -->
-            <rect x="40" y="8" width="38" height="26" rx="2" fill="#0f1f0f" stroke="#3fb950" stroke-width="1.5"/>
-            <circle cx="59" cy="20" r="7" fill="none" stroke="#3fb950" stroke-width="1.2"/>
-            <circle cx="59" cy="20" r="3" fill="#3fb950" opacity="0.8"/>
-            <line x1="52" y1="14" x2="66" y2="26" stroke="#3fb950" stroke-width="0.6" opacity="0.3"/>
-            <line x1="66" y1="14" x2="52" y2="26" stroke="#3fb950" stroke-width="0.6" opacity="0.3"/>
-            <text x="59" y="39" text-anchor="middle" fill="#3fb950" font-size="6.5" font-family="monospace" letter-spacing="0.3">PM1</text>
-            <!-- PM2 top-right nominal -->
-            <rect x="152" y="8" width="38" height="26" rx="2" fill="#0f1f0f" stroke="#3fb950" stroke-width="1.5"/>
-            <circle cx="171" cy="20" r="7" fill="none" stroke="#3fb950" stroke-width="1.2"/>
-            <circle cx="171" cy="20" r="3" fill="#3fb950" opacity="0.8"/>
-            <line x1="164" y1="14" x2="178" y2="26" stroke="#3fb950" stroke-width="0.6" opacity="0.3"/>
-            <line x1="178" y1="14" x2="164" y2="26" stroke="#3fb950" stroke-width="0.6" opacity="0.3"/>
-            <text x="171" y="39" text-anchor="middle" fill="#3fb950" font-size="6.5" font-family="monospace" letter-spacing="0.3">PM2</text>
-            <!-- PM3 left nominal -->
-            <rect x="4" y="62" width="38" height="26" rx="2" fill="#0f1f0f" stroke="#3fb950" stroke-width="1.5"/>
-            <circle cx="23" cy="75" r="7" fill="none" stroke="#3fb950" stroke-width="1.2"/>
-            <circle cx="23" cy="75" r="3" fill="#3fb950" opacity="0.8"/>
-            <line x1="16" y1="69" x2="30" y2="81" stroke="#3fb950" stroke-width="0.6" opacity="0.3"/>
-            <line x1="30" y1="69" x2="16" y2="81" stroke="#3fb950" stroke-width="0.6" opacity="0.3"/>
-            <text x="23" y="96" text-anchor="middle" fill="#3fb950" font-size="6.5" font-family="monospace" letter-spacing="0.3">PM3</text>
-            <!-- Transfer Module (octagon) -->
-            <polygon points="97,54 133,54 148,69 148,81 133,96 97,96 82,81 82,69" fill="#161b22" stroke="#2d333b" stroke-width="1.5"/>
-            <circle cx="115" cy="75" r="5" fill="none" stroke="#30363d" stroke-width="1.2"/>
-            <circle cx="115" cy="75" r="2" fill="#30363d"/>
-            <line x1="115" y1="75" x2="133" y2="75" stroke="#30363d" stroke-width="1.8" stroke-linecap="round"/>
-            <circle cx="133" cy="75" r="4" fill="none" stroke="#3d4450" stroke-width="1" stroke-dasharray="2 1.5"/>
-            <text x="102" y="91" text-anchor="middle" fill="#3d4450" font-size="6" font-family="monospace" letter-spacing="0.5">TM</text>
-            <!-- PM4 right nominal + trend pulse -->
-            <rect x="188" y="62" width="38" height="26" rx="2" fill="#0f1f0f" stroke="#3fb950" stroke-width="1.5"/>
-            <circle cx="207" cy="75" r="7" fill="none" stroke="#3fb950" stroke-width="1.2"/>
-            <circle cx="207" cy="75" r="3" fill="#3fb950" opacity="0.8"/>
-            <line x1="200" y1="69" x2="214" y2="81" stroke="#3fb950" stroke-width="0.6" opacity="0.3"/>
-            <line x1="214" y1="69" x2="200" y2="81" stroke="#3fb950" stroke-width="0.6" opacity="0.3"/>
-            <text x="207" y="96" text-anchor="middle" fill="#3fb950" font-size="6.5" font-family="monospace" letter-spacing="0.3">PM4</text>
-            <circle cx="207" cy="75" r="11" fill="none" stroke="#d29922" stroke-width="1" opacity="0">
-              <animate attributeName="r" values="10;17;10" dur="2.2s" repeatCount="indefinite"/>
-              <animate attributeName="opacity" values="0;0.5;0" dur="2.2s" repeatCount="indefinite"/>
-            </circle>
-            <!-- Load locks -->
-            <rect x="82" y="108" width="26" height="16" rx="2" fill="#1c2330" stroke="#2d333b" stroke-width="1.2"/>
-            <rect x="86" y="112" width="7" height="8" rx="1" fill="#161b22" stroke="#30363d" stroke-width="0.8"/>
-            <text x="104" y="119" text-anchor="middle" fill="#3d4450" font-size="6" font-family="monospace">LL1</text>
-            <rect x="122" y="108" width="26" height="16" rx="2" fill="#1c2330" stroke="#2d333b" stroke-width="1.2"/>
-            <rect x="141" y="112" width="7" height="8" rx="1" fill="#161b22" stroke="#30363d" stroke-width="0.8"/>
-            <text x="126" y="119" text-anchor="middle" fill="#3d4450" font-size="6" font-family="monospace">LL2</text>
-            <!-- EFEM -->
-            <rect x="38" y="130" width="154" height="15" rx="2" fill="#1c2330" stroke="#2d333b" stroke-width="1.2"/>
-            <rect x="48" y="133" width="13" height="9" rx="1" fill="#161b22" stroke="#30363d" stroke-width="0.8"/>
-            <rect x="108" y="133" width="13" height="9" rx="1" fill="#161b22" stroke="#30363d" stroke-width="0.8"/>
-            <rect x="168" y="133" width="13" height="9" rx="1" fill="#161b22" stroke="#30363d" stroke-width="0.8"/>
-            <text x="115" y="141" text-anchor="middle" fill="#3d4450" font-size="6" font-family="monospace" letter-spacing="2">EFEM</text>
-          </svg>
-        </div>
-        <div class="ch-footer">
-          <div>
-            <div class="ch-label">Multi-Chamber Etch System</div>
-            <div class="ch-bay" style="margin-top:2px;">BAY 2 · ETCH</div>
-          </div>
-          <div style="text-align:right;">
-            <div class="ch-bay">LOT_31B</div>
-            <div class="ch-bay" style="margin-top:1px;">W3142</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="service-aisle">SERVICE AISLE</div>
-
-      <!-- CHB -->
-      <div class="chamber-card fault" id="card-CHB" onclick="selectChamber('CHB')">
-        <div class="ch-header">
-          <span class="ch-name">CHB <span class="ch-dot red" style="display:inline-block;vertical-align:middle;margin-left:4px;"></span></span>
-          <span class="ch-status-badge fault">FAULT</span>
-        </div>
-        <div class="ch-diagram">
-          <svg viewBox="0 0 230 148" width="100%" height="100%">
-            <!-- Slit valve connections -->
-            <line x1="59" y1="34" x2="97" y2="54" stroke="#3a1a1a" stroke-width="2.5" stroke-linecap="round"/>
-            <line x1="171" y1="34" x2="133" y2="54" stroke="#21262d" stroke-width="2.5" stroke-linecap="round"/>
-            <line x1="42" y1="75" x2="82" y2="75" stroke="#21262d" stroke-width="2.5" stroke-linecap="round"/>
-            <line x1="148" y1="75" x2="188" y2="75" stroke="#21262d" stroke-width="2.5" stroke-linecap="round"/>
-            <line x1="99" y1="96" x2="93" y2="108" stroke="#21262d" stroke-width="2" stroke-linecap="round"/>
-            <line x1="131" y1="96" x2="137" y2="108" stroke="#21262d" stroke-width="2" stroke-linecap="round"/>
-            <line x1="93" y1="124" x2="87" y2="130" stroke="#21262d" stroke-width="1.5"/>
-            <line x1="137" y1="124" x2="143" y2="130" stroke="#21262d" stroke-width="1.5"/>
-            <!-- PM1 top-left FAULT -->
-            <rect x="40" y="8" width="38" height="26" rx="2" fill="#200a0a" stroke="#f85149" stroke-width="1.5"/>
-            <circle cx="59" cy="20" r="7" fill="none" stroke="#f85149" stroke-width="1.2"/>
-            <circle cx="59" cy="20" r="3" fill="#f85149" opacity="0.9"/>
-            <line x1="52" y1="14" x2="66" y2="26" stroke="#f85149" stroke-width="0.8" opacity="0.5"/>
-            <line x1="66" y1="14" x2="52" y2="26" stroke="#f85149" stroke-width="0.8" opacity="0.5"/>
-            <text x="59" y="39" text-anchor="middle" fill="#f85149" font-size="6.5" font-family="monospace" letter-spacing="0.3">PM1</text>
-            <circle cx="59" cy="20" r="11" fill="none" stroke="#f85149" stroke-width="0.8" opacity="0">
-              <animate attributeName="r" values="9;15;9" dur="1.5s" repeatCount="indefinite"/>
-              <animate attributeName="opacity" values="0;0.45;0" dur="1.5s" repeatCount="indefinite"/>
-            </circle>
-            <!-- PM2 top-right IDLE -->
-            <rect x="152" y="8" width="38" height="26" rx="2" fill="#1c2330" stroke="#2d333b" stroke-width="1.2"/>
-            <circle cx="171" cy="20" r="7" fill="none" stroke="#2d333b" stroke-width="1.2"/>
-            <circle cx="171" cy="20" r="3" fill="#2d333b"/>
-            <text x="171" y="39" text-anchor="middle" fill="#2d333b" font-size="6.5" font-family="monospace" letter-spacing="0.3">PM2</text>
-            <!-- PM3 left nominal -->
-            <rect x="4" y="62" width="38" height="26" rx="2" fill="#0f1f0f" stroke="#3fb950" stroke-width="1.5"/>
-            <circle cx="23" cy="75" r="7" fill="none" stroke="#3fb950" stroke-width="1.2"/>
-            <circle cx="23" cy="75" r="3" fill="#3fb950" opacity="0.8"/>
-            <line x1="16" y1="69" x2="30" y2="81" stroke="#3fb950" stroke-width="0.6" opacity="0.3"/>
-            <line x1="30" y1="69" x2="16" y2="81" stroke="#3fb950" stroke-width="0.6" opacity="0.3"/>
-            <text x="23" y="96" text-anchor="middle" fill="#3fb950" font-size="6.5" font-family="monospace" letter-spacing="0.3">PM3</text>
-            <!-- Transfer Module (octagon) -->
-            <polygon points="97,54 133,54 148,69 148,81 133,96 97,96 82,81 82,69" fill="#161b22" stroke="#2d333b" stroke-width="1.5"/>
-            <circle cx="115" cy="75" r="5" fill="none" stroke="#30363d" stroke-width="1.2"/>
-            <circle cx="115" cy="75" r="2" fill="#30363d"/>
-            <line x1="115" y1="75" x2="133" y2="75" stroke="#30363d" stroke-width="1.8" stroke-linecap="round"/>
-            <circle cx="133" cy="75" r="4" fill="none" stroke="#3d4450" stroke-width="1" stroke-dasharray="2 1.5"/>
-            <text x="102" y="91" text-anchor="middle" fill="#3d4450" font-size="6" font-family="monospace" letter-spacing="0.5">TM</text>
-            <!-- PM4 right nominal -->
-            <rect x="188" y="62" width="38" height="26" rx="2" fill="#0f1f0f" stroke="#3fb950" stroke-width="1.5"/>
-            <circle cx="207" cy="75" r="7" fill="none" stroke="#3fb950" stroke-width="1.2"/>
-            <circle cx="207" cy="75" r="3" fill="#3fb950" opacity="0.8"/>
-            <line x1="200" y1="69" x2="214" y2="81" stroke="#3fb950" stroke-width="0.6" opacity="0.3"/>
-            <line x1="214" y1="69" x2="200" y2="81" stroke="#3fb950" stroke-width="0.6" opacity="0.3"/>
-            <text x="207" y="96" text-anchor="middle" fill="#3fb950" font-size="6.5" font-family="monospace" letter-spacing="0.3">PM4</text>
-            <!-- Load locks -->
-            <rect x="82" y="108" width="26" height="16" rx="2" fill="#1c2330" stroke="#2d333b" stroke-width="1.2"/>
-            <rect x="86" y="112" width="7" height="8" rx="1" fill="#161b22" stroke="#30363d" stroke-width="0.8"/>
-            <text x="104" y="119" text-anchor="middle" fill="#3d4450" font-size="6" font-family="monospace">LL1</text>
-            <rect x="122" y="108" width="26" height="16" rx="2" fill="#1c2330" stroke="#2d333b" stroke-width="1.2"/>
-            <rect x="141" y="112" width="7" height="8" rx="1" fill="#161b22" stroke="#30363d" stroke-width="0.8"/>
-            <text x="126" y="119" text-anchor="middle" fill="#3d4450" font-size="6" font-family="monospace">LL2</text>
-            <!-- EFEM -->
-            <rect x="38" y="130" width="154" height="15" rx="2" fill="#1c2330" stroke="#2d333b" stroke-width="1.2"/>
-            <rect x="48" y="133" width="13" height="9" rx="1" fill="#161b22" stroke="#30363d" stroke-width="0.8"/>
-            <rect x="108" y="133" width="13" height="9" rx="1" fill="#161b22" stroke="#30363d" stroke-width="0.8"/>
-            <rect x="168" y="133" width="13" height="9" rx="1" fill="#161b22" stroke="#30363d" stroke-width="0.8"/>
-            <text x="115" y="141" text-anchor="middle" fill="#3d4450" font-size="6" font-family="monospace" letter-spacing="2">EFEM</text>
-          </svg>
-        </div>
-        <div class="ch-footer">
-          <div>
-            <div class="ch-label">Multi-Chamber Etch System</div>
-            <div class="ch-bay" style="margin-top:2px;">BAY 3 · ETCH</div>
-          </div>
-          <div style="text-align:right;">
-            <div class="ch-bay">LOT_31B</div>
-            <div class="ch-bay" style="margin-top:1px;">W3143</div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <div class="floor" id="floor"></div>
   </div>
 
-  <!-- SIDEBAR -->
-  <div class="sidebar">
-    <div class="panel" style="flex-shrink:0;">
-      <div class="panel-header">
-        <span class="panel-title">INCOMING ERRORS</span>
-        <span class="count-badge" id="error-count">8</span>
-      </div>
-      <div class="errors-list" id="errors-list"></div>
+  <!-- TREND WATCH -->
+  <div class="panel trend">
+    <div class="trend-label">
+      <span class="trend-title">TREND WATCH</span>
+      <span class="trend-agent">ANOMALY AGENT</span>
     </div>
-    <div class="detail-panel" id="detail-panel">
-      <div style="padding:8px 12px;border-bottom:1px solid var(--border);">
-        <div id="detail-panel-title" style="font-size:10px;font-weight:700;letter-spacing:1.2px;margin-bottom:2px;">MACHINE DETAIL</div>
+    <div class="trend-items" id="trendItems"></div>
+  </div>
+
+  <!-- INCOMING ERRORS -->
+  <div class="panel errors">
+    <div class="errors-head">
+      <span class="errors-title">INCOMING ERRORS</span>
+      <span class="live-dot"></span>
+      <div class="err-counts">
+        <span class="err-count"><span class="dot red"></span> <b id="err-red">0</b></span>
+        <span class="err-count"><span class="dot green"></span> <b id="err-green">0</b></span>
       </div>
-      <div id="detail-content"></div>
     </div>
+    <div class="errors-list" id="errorsList"></div>
   </div>
 </div>
-<style>
-  #detail-panel-title { transition: color 0.15s; }
-</style>
 
-<!-- TREND WATCH -->
-<div class="trend-bar">
-  <div class="trend-label-block">
-    <div class="trend-title">TREND WATCH</div>
-    <div style="font-size:7px;color:var(--blue);letter-spacing:0.8px;margin-top:2px;">ANOMALY AGENT</div>
-  </div>
-  <div class="trend-items" id="trend-items"></div>
-</div>
+<!-- HOVER TOOLTIP -->
+<div class="tooltip" id="tooltip"></div>
+
+<!-- MODAL BACKDROP -->
+<div class="backdrop" id="backdrop"><div id="modalMount"></div></div>
 
 <script>
+/* ════════════════════════════════════════════════════════════════════════
+   DATA  —  In production this is the live feed from the agents:
+     · production_agent.py  → anomaly + trend findings (Anomaly tags)
+     · quality_agent.py     → defect / release-gate findings (Quality tags)
+   Each chamber rolls up its agent findings + current sensor snapshot.
+   ════════════════════════════════════════════════════════════════════════ */
 const CHAMBERS = {
   CHA: {
-    name: 'CHA', status: 'watch', bay: 'BAY 2 · ETCH',
-    machine: 'Multi-Chamber Etch System',
-    lot: 'LOT_31B', wafer: 3142, recipe: 'METAL_ETCH_A_V3',
-    shift: 'DAY', rf_hrs: 1241.73, pm_count: 43,
-    wafers_total: 43, wafers_fail: 5,
-    open_wo: 'NONE', oee: 0.0,
-    sensors: {
-      'TCP TOP PWR':   { val: 349.46, unit: 'W',    min: 334, max: 360, status: 'ok'    },
-      'BCl3 FLOW':     { val: 750.0,  unit: 'sccm', min: 740, max: 765, status: 'ok'    },
-      'PRESSURE':      { val: 1261.0, unit: 'mTorr',min: 942, max: 1420,status: 'watch' },
-      'RF BTM PWR':    { val: 133.0,  unit: 'W',    min: 124, max: 142, status: 'ok'    },
-    },
+    name: 'CHA', status: 'fault', monitored: true,
+    machine: 'Multi-Chamber Etch System', bay: 'BAY 2 · ETCH',
+    chamber: 'PC1', lot: 'LOT-40W48', recipe: 'Metal · M2', wafers: '19/25', uptime: '92h',
+    // current snapshot (hover popup uses the short forms)
+    temp: '68 °C', tempShort: '68.5°C', pressure: '55.1', press: '54.8',
+    rfPower: '1511 W', throughput: '85 wph', rate: '87 wph',
+    modules: ['green', 'green', 'red', 'idle'],
     findings: [
-      '⚠ tcp_top_pwr exceeded 360 W on wafer 3142 step 0 (+1.0 W)',
-      '↑ Pressure trending upward — slope +25.0 mTorr/step, R²=0.937',
-      '⚠ 43 wafers since last PM — maintenance window approaching',
-      '⚠ bcl3_flow below threshold on wafer 3122 (LOT_31B)',
+      { type: 'anomaly', pc: 'PC2', text: 'Sustained parameter drift crossed upper control limit — fault declared', id: 'ANM-5217', time: '14:36:05' },
+      { type: 'quality', pc: 'PC2', text: 'Defect density 0.81 /cm² — above release gate', id: 'NCR-2685', time: '14:36:07' },
     ]
   },
   CHB: {
-    name: 'CHB', status: 'fault', bay: 'BAY 3 · ETCH',
-    machine: 'Multi-Chamber Etch System',
-    lot: 'LOT_31B', wafer: 3143, recipe: 'METAL_ETCH_A_V3',
-    shift: 'DAY', rf_hrs: 988.47, pm_count: 43,
-    wafers_total: 43, wafers_fail: 5,
-    open_wo: 'WO-CHB-3143', oee: 0.0,
-    sensors: {
-      'TCP TOP PWR':   { val: 344.16, unit: 'W',    min: 334, max: 360, status: 'ok'   },
-      'BCl3 FLOW':     { val: 751.0,  unit: 'sccm', min: 740, max: 765, status: 'ok'   },
-      'PRESSURE':      { val: 1296.0, unit: 'mTorr',min: 942, max: 1420,status: 'ok'   },
-      'RF BTM PWR':    { val: 133.0,  unit: 'W',    min: 124, max: 142, status: 'ok'   },
-    },
+    name: 'CHB', status: 'nominal', monitored: true,
+    machine: 'PECVD Deposition Cluster', bay: 'BAY 3 · DEPOSITION',
+    chamber: 'PC1', lot: 'LOT-39X12', recipe: 'TEOS · D4', wafers: '24/25', uptime: '210h',
+    temp: '395 °C', tempShort: '395°C', pressure: '2.10', press: '2.10',
+    rfPower: '900 W', throughput: '110 wph', rate: '110 wph',
+    modules: ['green', 'idle', 'green', 'green'],
     findings: [
-      '🚨 tcp_top_pwr exceeded 360 W on wafer 3143 — FAIL logged',
-      '🚨 Open work order: WO-CHB-3143 (unresolved)',
-      '↑ Pressure trend detected on wafer 2918 — slope +36.4 mTorr/step',
-      '⚠ bcl3_flow below threshold on wafers 3141 (98 steps affected)',
+      { type: 'trend', pc: 'PC1', text: 'Deposition rate rising — 62% of control band, monitoring', id: 'TRD-1180', time: '14:31:40' },
     ]
   }
 };
 
-const ERRORS = [
-  { time:'09:48:32', chamber:'CHB', lot:'LOT_31B', wafer:3143, sensor:'tcp_top_pwr', value:360.46, min:334, max:360, type:'anomaly', id:'ANM-3912', desc:'TCP top power exceeded maximum threshold' },
-  { time:'09:43:17', chamber:'CHA', lot:'LOT_31B', wafer:3142, sensor:'tcp_top_pwr', value:361.0,  min:334, max:360, type:'anomaly', id:'ANM-3908', desc:'TCP top power exceeded maximum threshold' },
-  { time:'09:39:10', chamber:'CHB', lot:'LOT_31B', wafer:3141, sensor:'bcl3_flow',   value:724.47, min:740, max:765, type:'anomaly', id:'ANM-3905', desc:'BCl3 flow dropped below minimum threshold' },
-  { time:'09:39:10', chamber:'CHB', lot:'LOT_31B', wafer:3141, sensor:'tcp_top_pwr', value:361.0,  min:334, max:360, type:'anomaly', id:'ANM-3904', desc:'TCP top power exceeded maximum threshold' },
-  { time:'09:34:48', chamber:'CHA', lot:'LOT_31B', wafer:3122, sensor:'bcl3_flow',   value:724.47, min:740, max:765, type:'anomaly', id:'ANM-3901', desc:'BCl3 flow dropped below minimum threshold' },
-  { time:'09:27:00', chamber:'CHA', lot:'LOT_31B', wafer:3120, sensor:'tcp_top_pwr', value:360.28, min:334, max:360, type:'anomaly', id:'ANM-3897', desc:'TCP top power exceeded maximum threshold' },
-  { time:'09:22:21', chamber:'CHB', lot:'LOT_31B', wafer:3140, sensor:'tcp_top_pwr', value:361.0,  min:334, max:360, type:'anomaly', id:'ANM-3893', desc:'TCP top power exceeded maximum threshold' },
-  { time:'08:56:31', chamber:'CHA', lot:'LOT_31B', wafer:3137, sensor:'tcp_top_pwr', value:361.0,  min:334, max:360, type:'anomaly', id:'ANM-3889', desc:'TCP top power exceeded maximum threshold' },
-];
+const CRITICAL = { id: 'ANM-4410', chamber: 'CHA', pc: 'PC3', text: 'Throughput dropped 22% over last 6 lots', time: '14:32:46' };
 
-const PRESSURE_CHA = [1074,1072,1072,1118,1135,1176,1212,1227,1175,1196,1200,1194,1196,1198,1195,1197,1197,1195,1193,1193,1194,1198,1196,1197,1196,1195,1199,1196,1194,1197,1211,1200,1204,1105,1108,1158,1200,1196,1197,1195,1196,1193,1196,1195,1189,1190,1196,1196,1207,1202,1214,1205,1192,1195,1198,1198,1194,1198,1197,1197,1196,1196,1195,1196,1197,1195,1194,1195,1195,1198,1196,1196,1197,1197,1198,1197,1195,1195,1198,1196,1195,1261];
-const PRESSURE_CHB = [943,943,942,1042,1117,1172,1196,1215,1231,1178,1201,1207,1200,1205,1203,1207,1199,1203,1202,1202,1202,1201,1203,1201,1203,1204,1201,1201,1201,1200,1201,1201,1200,1203,1200,1204,1202,1200,1204,1202,1211,1214,1203,1144,973,1102,1181,1213,1201,1199,1202,1202,1199,1199,1203,1195,1195,1192,1205,1212,1212,1212,1224,1217,1194,1203,1203,1204,1201,1204,1203,1200,1201,1203,1202,1200,1202,1200,1201,1203,1201,1201,1199,1201,1201,1199,1200,1199,1202,1202,1201,1220];
+const ERRORS = [
+  { chamber: 'CHA', pc: 'PC3', type: 'quality', text: 'Defect density 0.81 /cm² — above release gate', id: 'NCR-2284', time: '14:32:48' },
+  { chamber: 'CHA', pc: 'PC3', type: 'anomaly', text: 'Throughput dropped 22% over last 6 lots',     id: 'ANM-4410', time: '14:32:46' },
+];
 
 const TRENDS = [
-  { chamber:'CHA', label:'CHA · PC3 pressure', direction:'increasing', slope:25.0, r2:0.9369, range_frac:42, steps_to_breach:7, data: PRESSURE_CHA, color:'#d29922' },
-  { chamber:'CHB', label:'CHB · PC1 pressure', direction:'increasing', slope:36.44, r2:0.851, range_frac:61, steps_to_breach:6, data: PRESSURE_CHB, color:'#f85149' },
+  { label: 'CHA · PC3 pressure', pct: 60, tone: 'green',  status: 'stable',
+    data: [40,42,41,43,42,44,43,45,44,43,45,44,46,45,44,46,45,47,46,45] },
+  { label: 'CHB · PC1 dep rate', pct: 62, tone: 'yellow', status: 'rising — monitoring',
+    data: [22,23,24,23,25,26,27,29,31,33,36,39,42,45,48,52,55,58,61,64] },
+  { label: 'CHA · PC2 RF power', pct: 67, tone: 'yellow', status: 'rising — monitoring',
+    data: [30,31,30,32,33,34,36,38,40,43,46,49,52,55,58,61,64,66,68,70] },
 ];
 
-// Maps ERRORS sensor keys → CHAMBERS.sensors display keys
-const SENSOR_LABEL_MAP = {
-  'tcp_top_pwr': 'TCP TOP PWR',
-  'bcl3_flow':   'BCl3 FLOW',
-  'pressure':    'PRESSURE',
-  'rf_btm_pwr':  'RF BTM PWR',
-};
+// Top-down plant layout (Live View). Only CHA / CHB are agent-monitored tools.
+const TOOLS = [
+  { id: 'CHA',     status: 'fault',   monitored: true,  machine: 'Multi-Chamber Etch System', bay: 'BAY 2' },
+  { id: 'EFEM-LP1',status: 'idle',    monitored: false, machine: 'EFEM Load Port',            bay: 'BAY 2' },
+  { id: 'CHB',     status: 'nominal', monitored: true,  machine: 'PECVD Deposition Cluster',  bay: 'BAY 3' },
+  { id: 'MET-1',   status: 'nominal', monitored: false, machine: 'Metrology / CD-SEM',        bay: 'BAY 3' },
+  { id: 'AMHS-S2', status: 'nominal', monitored: false, machine: 'AMHS Stocker',              bay: 'AISLE' },
+  { id: 'WB-2',    status: 'nominal', monitored: false, machine: 'Wet Bench Clean',           bay: 'BAY 3' },
+];
 
-function renderErrors() {
-  document.getElementById('errors-list').innerHTML = ERRORS.map((e, i) => `
-    <div class="error-item ${e.type}" id="err-${i}" onclick="openError(${i})">
-      <div class="error-top">
-        <span>
-          <span class="error-chamber">${e.chamber}</span>
-          <span style="color:var(--muted);font-size:9px;"> ${e.lot}</span>
-          <span class="tag ${e.type}" style="margin-left:4px;">${e.type === 'anomaly' ? 'Anomaly' : 'Trend'}</span>
-        </span>
-        <span class="error-time">${e.time}</span>
-      </div>
-      <div class="error-desc">${e.desc}</div>
-      <div class="error-id">${e.id} · W${e.wafer} · ${e.sensor} = ${e.value.toFixed(2)} [${e.min}–${e.max}]</div>
-    </div>
-  `).join('');
+const STATUS_COLOR = { fault: 'var(--red)', nominal: 'var(--green)', watch: 'var(--yellow)', idle: 'var(--muted)' };
+const STATUS_TEXT  = { fault: 'FAULT', nominal: 'NOMINAL', watch: 'WATCH', idle: 'IDLE' };
+
+/* ───────────── SVG: big chamber diagram ───────────── */
+function moduleColor(tone) {
+  if (tone === 'green') return '#34d399';
+  if (tone === 'red')   return '#f87171';
+  if (tone === 'yellow')return '#fbbf24';
+  return '#2c3a57';
 }
-
-function openError(idx) {
-  // Highlight the clicked error row
-  document.querySelectorAll('.error-item').forEach(el => el.style.background = '');
-  const row = document.getElementById('err-' + idx);
-  if (row) row.style.background = 'rgba(88,166,255,0.06)';
-  // Select the chamber and pass fault snapshot
-  const e = ERRORS[idx];
-  document.querySelectorAll('.chamber-card').forEach(c => c.classList.remove('selected'));
-  const card = document.getElementById('card-' + e.chamber);
-  if (card) card.classList.add('selected');
-  renderDetail(e.chamber, e);
+function procModule(cx, cy, tone) {
+  const c = moduleColor(tone);
+  const fill = tone === 'idle' ? 'rgba(255,255,255,0.012)'
+    : tone === 'red' ? 'rgba(248,113,113,0.08)'
+    : tone === 'yellow' ? 'rgba(251,191,36,0.07)'
+    : 'rgba(52,211,153,0.06)';
+  const glow = (tone === 'red')
+    ? `<rect x="${cx-32}" y="${cy-27}" width="64" height="54" rx="15" fill="none" stroke="${c}" stroke-width="1" opacity="0.0"><animate attributeName="opacity" values="0;0.5;0" dur="1.6s" repeatCount="indefinite"/></rect>` : '';
+  return `
+    ${glow}
+    <rect x="${cx-29}" y="${cy-24}" width="58" height="48" rx="13" fill="${fill}" stroke="${c}" stroke-width="1.6"/>
+    <circle cx="${cx}" cy="${cy}" r="14" fill="none" stroke="${c}" stroke-width="1.4" opacity="0.85"/>
+    <circle cx="${cx}" cy="${cy}" r="4.5" fill="${c}"/>`;
 }
-
-function renderDetail(chName, fault) {
-  const ch = CHAMBERS[chName];
-  const statusTag = ch.status === 'fault'
-    ? `<span class="fault-tag">FAULT</span>`
-    : `<span class="watch-tag">WATCH</span>`;
-
-  const faultSensorLabel = fault ? SENSOR_LABEL_MAP[fault.sensor] : null;
-
-  const sensorHtml = Object.entries(ch.sensors).map(([name, s]) => {
-    const isHit = faultSensorLabel === name;
-    if (isHit) {
-      // Show fault-time value prominently, current reading below
-      const dir = fault.value > fault.max ? `+${(fault.value - fault.max).toFixed(2)} above max` : `${(fault.value - fault.min).toFixed(2)} below min`;
-      return `<div class="sensor-box fault">
-        <div class="sensor-label" style="display:flex;align-items:center;justify-content:space-between;">
-          <span>${name}</span>
-          <span style="font-size:7px;background:rgba(248,81,73,0.2);color:var(--red);padding:1px 4px;border-radius:2px;letter-spacing:0.5px;">FAULT SNAPSHOT</span>
-        </div>
-        <div class="sensor-value fault">${fault.value.toFixed(2)} <span class="sensor-unit">${s.unit}</span></div>
-        <div style="font-size:8px;color:var(--red);margin-top:1px;">${dir} · W${fault.wafer} @ ${fault.time}</div>
-        <div style="margin-top:5px;padding-top:5px;border-top:1px solid var(--border2);display:flex;justify-content:space-between;align-items:center;">
-          <span style="font-size:8px;color:var(--muted);letter-spacing:0.5px;">NOW</span>
-          <span style="font-size:11px;color:var(--muted);">${s.val.toFixed(1)} <span style="font-size:8px;">${s.unit}</span></span>
-        </div>
-      </div>`;
-    }
-    const cls = s.status === 'fault' ? 'fault' : s.status === 'watch' ? 'watch' : '';
-    return `<div class="sensor-box ${cls}">
-      <div class="sensor-label">${name}</div>
-      <div class="sensor-value ${cls}">${s.val.toFixed(1)} <span class="sensor-unit">${s.unit}</span></div>
-    </div>`;
-  }).join('');
-
-  const findingsHtml = ch.findings.map(f => `<div class="finding-item"><span class="finding-text">${f}</span></div>`).join('');
-
-  const titleEl = document.getElementById('detail-panel-title');
-  if (titleEl) titleEl.innerHTML = fault
-    ? `MACHINE DETAIL <span style="font-size:8px;color:var(--muted);font-weight:400;letter-spacing:0.5px;margin-left:4px;">· ${fault.id}</span>`
-    : `MACHINE DETAIL`;
-
-  document.getElementById('detail-content').innerHTML = `
-    <div style="padding:8px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
-      <div>
-        <span style="font-size:12px;font-weight:700;">${ch.name}</span>${statusTag}
-        <div style="font-size:9px;color:var(--muted);margin-top:2px;">${ch.machine}</div>
-      </div>
-      <div style="text-align:right;">
-        <div style="font-size:8px;color:var(--muted);">OEE</div>
-        <div style="font-size:13px;font-weight:700;color:var(--yellow);">${(ch.oee*100).toFixed(0)}%</div>
-      </div>
-    </div>
-    <div class="meta-grid">
-      <div class="meta-item"><label>CHAMBER</label><span>${ch.name}</span></div>
-      <div class="meta-item"><label>LOT</label><span>${ch.lot}</span></div>
-      <div class="meta-item"><label>WAFERS</label><span>${ch.wafer % 100}/${ch.wafers_total}</span></div>
-      <div class="meta-item"><label>RECIPE</label><span style="font-size:9px;">${ch.recipe.replace('METAL_ETCH_A_','')}</span></div>
-      <div class="meta-item"><label>RF HRS</label><span>${ch.rf_hrs}h</span></div>
-      <div class="meta-item"><label>PM COUNT</label><span style="color:${ch.pm_count>=40?'var(--yellow)':'var(--text)'};">${ch.pm_count}</span></div>
-      <div class="meta-item"><label>SHIFT</label><span>${ch.shift}</span></div>
-      <div class="meta-item"><label>FAILS</label><span style="color:${ch.wafers_fail>0?'var(--red)':'var(--text)'};">${ch.wafers_fail}</span></div>
-      <div class="meta-item"><label>WORK ORDER</label><span style="font-size:8px;color:${ch.open_wo!=='NONE'?'var(--red)':'var(--muted)'};">${ch.open_wo}</span></div>
-    </div>
-    <div class="sensor-grid">${sensorHtml}</div>
-    <div class="findings"><div class="findings-label">AGENT FINDINGS</div>${findingsHtml}</div>
-  `;
-}
-
-function selectChamber(name) {
-  document.querySelectorAll('.chamber-card').forEach(c => c.classList.remove('selected'));
-  document.querySelectorAll('.error-item').forEach(el => el.style.background = '');
-  const card = document.getElementById('card-' + name);
-  if (card) card.classList.add('selected');
-  renderDetail(name);
-}
-
-function sparkline(data, color, w, h) {
-  const mn = Math.min(...data), mx = Math.max(...data), rng = mx - mn || 1;
-  const pts = data.map((v,i) => `${((i/(data.length-1))*w).toFixed(1)},${(h-((v-mn)/rng)*h).toFixed(1)}`).join(' ');
-  const last_x = w, last_y = (h-((data[data.length-1]-mn)/rng)*h).toFixed(1);
-  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="display:block;">
-    <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.2" stroke-linejoin="round"/>
-    <circle cx="${last_x}" cy="${last_y}" r="2" fill="${color}"/>
+function bigDiagram(ch) {
+  const m = ch.modules;
+  const line = (x1,y1,x2,y2) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#223049" stroke-width="2" stroke-linecap="round"/>`;
+  return `<svg viewBox="0 0 300 250" preserveAspectRatio="xMidYMid meet">
+    ${line(120,72,93,55)} ${line(180,72,207,55)}
+    ${line(108,108,73,124)} ${line(192,108,227,124)}
+    ${line(140,144,134,162)} ${line(160,144,166,162)}
+    ${line(134,182,118,196)} ${line(166,182,182,196)}
+    <polygon points="128,72 172,72 194,108 172,144 128,144 106,108" fill="rgba(15,22,40,0.55)" stroke="#2c3a57" stroke-width="1.6"/>
+    <line x1="150" y1="92" x2="150" y2="118" stroke="#3a4a68" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="150" cy="108" r="5" fill="none" stroke="#3a4a68" stroke-width="1.5"/>
+    <circle cx="150" cy="88" r="3" fill="#3a4a68"/>
+    ${procModule(64, 55, m[0])}
+    ${procModule(236, 55, m[1])}
+    ${procModule(48, 124, m[2])}
+    ${procModule(252, 124, m[3])}
+    <rect x="118" y="162" width="26" height="20" rx="6" fill="rgba(255,255,255,0.015)" stroke="#2c3a57" stroke-width="1.3"/>
+    <rect x="156" y="162" width="26" height="20" rx="6" fill="rgba(255,255,255,0.015)" stroke="#2c3a57" stroke-width="1.3"/>
+    <rect x="70" y="198" width="160" height="30" rx="9" fill="rgba(255,255,255,0.012)" stroke="#2c3a57" stroke-width="1.4"/>
+    <rect x="92"  y="194" width="18" height="11" rx="3" fill="rgba(11,19,34,1)" stroke="#2c3a57" stroke-width="1"/>
+    <rect x="141" y="194" width="18" height="11" rx="3" fill="rgba(11,19,34,1)" stroke="#2c3a57" stroke-width="1"/>
+    <rect x="190" y="194" width="18" height="11" rx="3" fill="rgba(11,19,34,1)" stroke="#2c3a57" stroke-width="1"/>
+    <text x="150" y="217" text-anchor="middle" fill="#46546e" font-family="monospace" font-size="9.5" letter-spacing="3">EFEM</text>
   </svg>`;
 }
 
+/* ───────────── SVG: top-down tool icon (plant view) ───────────── */
+function toolIcon(status) {
+  const c = STATUS_COLOR[status];
+  const stroke = status === 'idle' ? '#2c3a57' : c;
+  const tint = status === 'fault' ? 'rgba(248,113,113,0.06)' : status === 'nominal' ? 'rgba(52,211,153,0.05)' : 'rgba(255,255,255,0.012)';
+  return `<svg width="120" height="74" viewBox="0 0 120 74">
+    <rect x="20" y="10" width="80" height="48" rx="11" fill="${tint}" stroke="${stroke}" stroke-width="1.6"/>
+    <rect x="10" y="24" width="12" height="20" rx="3" fill="${tint}" stroke="${stroke}" stroke-width="1.4"/>
+    <rect x="98" y="24" width="12" height="20" rx="3" fill="${tint}" stroke="${stroke}" stroke-width="1.4"/>
+    <ellipse cx="60" cy="34" rx="22" ry="13" fill="none" stroke="${stroke}" stroke-width="1.4" opacity="0.8"/>
+    <circle cx="60" cy="34" r="5" fill="${c}"/>
+  </svg>`;
+}
+
+/* ───────────── SVG: sparkline ───────────── */
+function sparkline(data, tone, w, h) {
+  const color = tone === 'green' ? '#34d399' : tone === 'yellow' ? '#fbbf24' : '#f87171';
+  const mn = Math.min(...data), mx = Math.max(...data), rng = (mx - mn) || 1;
+  const pts = data.map((v,i) => `${((i/(data.length-1))*w).toFixed(1)},${(h-((v-mn)/rng)*(h-4)-2).toFixed(1)}`).join(' ');
+  const lx = w, ly = (h-((data[data.length-1]-mn)/rng)*(h-4)-2).toFixed(1);
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+    <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>
+    <circle cx="${lx}" cy="${ly}" r="2.4" fill="${color}"/>
+  </svg>`;
+}
+
+/* ───────────── RENDER ───────────── */
+function renderCritical() {
+  document.getElementById('critical').innerHTML = `
+    <span class="crit-dot"></span>
+    <span class="crit-label">CRITICAL</span>
+    <span class="crit-id">${CRITICAL.id}</span>
+    <span class="crit-ch">${CRITICAL.chamber}</span>
+    <span class="crit-pc">${CRITICAL.pc}</span>
+    <span class="crit-msg">${CRITICAL.text}</span>
+    <span class="crit-time">${CRITICAL.time}</span>`;
+}
+
+function renderChambers() {
+  const order = ['CHA', 'CHB'];
+  document.getElementById('floor').innerHTML = order.map((key, i) => {
+    const ch = CHAMBERS[key];
+    const card = `
+      <div class="chamber ${ch.status}" data-ch="${key}">
+        <div class="ch-head">
+          <div class="ch-name">${ch.name} <span class="dot ${ch.status === 'fault' ? 'red' : ch.status === 'watch' ? 'yellow' : 'green'}"></span></div>
+          <div class="ch-status ${ch.status}">${STATUS_TEXT[ch.status]}</div>
+        </div>
+        <div class="ch-diagram">${bigDiagram(ch)}</div>
+        <div class="ch-foot">
+          <div class="ch-machine">${ch.machine}</div>
+          <div class="ch-bay">${ch.bay}</div>
+        </div>
+      </div>`;
+    return i === 0 ? card + `<div class="aisle"><span>SERVICE AISLE</span></div>` : card;
+  }).join('');
+
+  document.querySelectorAll('.chamber').forEach(el => {
+    const key = el.dataset.ch;
+    el.addEventListener('mouseenter', e => showTooltip(key, e));
+    el.addEventListener('mousemove', e => moveTooltip(e));
+    el.addEventListener('mouseleave', hideTooltip);
+    el.addEventListener('click', () => { hideTooltip(); openDetail(key); });
+  });
+}
+
+function renderErrors() {
+  document.getElementById('errorsList').innerHTML = ERRORS.map(e => `
+    <div class="err-card ${e.type}" data-id="${e.id}" data-ch="${e.chamber}">
+      <div class="err-top">
+        <span class="err-ch">${e.chamber}</span>
+        <span class="err-pc">${e.pc}</span>
+        <span class="tag ${e.type}">${e.type === 'anomaly' ? 'Anomaly' : e.type === 'quality' ? 'Quality' : 'Trend'}</span>
+        <span class="err-time">${e.time}</span>
+      </div>
+      <div class="err-desc">${e.text}</div>
+      <div class="err-id">${e.id}</div>
+    </div>`).join('');
+  document.getElementById('err-red').textContent = ERRORS.length;
+  document.getElementById('err-green').textContent = 0;
+  document.querySelectorAll('.err-card').forEach(el => {
+    el.addEventListener('click', () => { if (CHAMBERS[el.dataset.ch]) openDetail(el.dataset.ch); });
+  });
+}
+
 function renderTrends() {
-  document.getElementById('trend-items').innerHTML = TRENDS.map(t => {
-    const pct = t.range_frac;
-    const pctCls = pct >= 60 ? 'red' : pct >= 40 ? 'yellow' : 'green';
-    const ch = CHAMBERS[t.chamber];
-    return `<div class="trend-item">
+  document.getElementById('trendItems').innerHTML = TRENDS.map(t => `
+    <div class="trend-item">
       <div class="trend-top">
         <span class="trend-name">${t.label}</span>
-        <span class="trend-pct ${pctCls}">${pct}%</span>
+        <span class="trend-pct ${t.tone}">${t.pct}%</span>
       </div>
-      <div class="trend-sparkline">${sparkline(t.data.slice(-50), t.color, 160, 44)}</div>
-      <div class="trend-mid">
-        <div class="trend-stat"><span class="trend-stat-label">SLOPE</span><span class="trend-stat-val">+${t.slope} /step</span></div>
-        <div class="trend-stat"><span class="trend-stat-label">R²</span><span class="trend-stat-val">${t.r2}</span></div>
-        <div class="trend-stat"><span class="trend-stat-label">BREACH</span><span class="trend-stat-val" style="color:${pctCls==='red'?'var(--red)':'var(--yellow)'};">~${t.steps_to_breach}s</span></div>
-        <div class="trend-stat"><span class="trend-stat-label">LOT</span><span class="trend-stat-val">${ch.lot}</span></div>
+      <div class="trend-spark">
+        ${sparkline(t.data, t.tone, 110, 28)}
+        <span class="trend-status">${t.status}</span>
       </div>
-      <div class="trend-bottom">
-        <span class="trend-desc">${t.direction} toward upper limit</span>
-        <span class="trend-agent-badge">ANOMALY AGENT</span>
-      </div>
+    </div>`).join('');
+}
+
+/* ───────────── HOVER TOOLTIP ───────────── */
+const tt = document.getElementById('tooltip');
+function showTooltip(key, e) {
+  const ch = CHAMBERS[key];
+  const col = STATUS_COLOR[ch.status];
+  tt.innerHTML = `
+    <div class="tt-head">
+      <span class="tt-name">${ch.name}</span>
+      <span class="dot" style="background:${col};box-shadow:0 0 7px ${col};"></span>
+      <span class="tt-status" style="color:${col};">${STATUS_TEXT[ch.status]}</span>
+    </div>
+    <div class="tt-machine">${ch.machine}</div>
+    <div class="tt-grid">
+      <div class="kv"><label>CHAMBER</label><span>${ch.chamber}</span></div>
+      <div class="kv"><label>LOT</label><span>${ch.lot}</span></div>
+      <div class="kv"><label>RECIPE</label><span>${ch.recipe}</span></div>
+      <div class="kv"><label>WAFERS</label><span>${ch.wafers}</span></div>
+    </div>
+    <div class="tt-divider"></div>
+    <div class="tt-grid three">
+      <div class="kv"><label>TEMP</label><span>${ch.tempShort}</span></div>
+      <div class="kv"><label>PRESS</label><span>${ch.press}</span></div>
+      <div class="kv"><label>RATE</label><span>${ch.rate}</span></div>
     </div>`;
+  tt.classList.add('show');
+  moveTooltip(e);
+}
+function moveTooltip(e) {
+  const pad = 16, w = 290, h = tt.offsetHeight || 230;
+  let x = e.clientX + pad, y = e.clientY + pad;
+  if (x + w > window.innerWidth - 10) x = e.clientX - w - pad;
+  if (y + h > window.innerHeight - 10) y = window.innerHeight - h - 10;
+  tt.style.left = x + 'px'; tt.style.top = y + 'px';
+}
+function hideTooltip() { tt.classList.remove('show'); }
+
+/* ───────────── MODALS ───────────── */
+const backdrop = document.getElementById('backdrop');
+const mount = document.getElementById('modalMount');
+
+function openModal(html, cls) {
+  mount.innerHTML = `<div class="modal ${cls}">${html}</div>`;
+  backdrop.classList.add('show');
+  mount.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', closeModal));
+}
+function closeModal() { backdrop.classList.remove('show'); mount.innerHTML = ''; }
+backdrop.addEventListener('click', e => { if (e.target === backdrop) closeModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+function openDetail(key) {
+  const ch = CHAMBERS[key];
+  const col = STATUS_COLOR[ch.status];
+  const findings = ch.findings.map(f => {
+    const fc = f.type === 'anomaly' ? 'var(--teal)' : f.type === 'quality' ? 'var(--green)' : 'var(--yellow)';
+    const label = f.type === 'anomaly' ? 'Anomaly' : f.type === 'quality' ? 'Quality' : 'Trend';
+    return `
+      <div class="finding">
+        <span class="fdot" style="background:${fc};box-shadow:0 0 6px ${fc};"></span>
+        <div class="finding-top">
+          <span class="tag ${f.type}">${label}</span>
+          <span class="finding-pc">${f.pc}</span>
+        </div>
+        <span class="finding-time">${f.time}</span>
+        <div class="finding-desc">${f.text}</div>
+        <div class="finding-id">${f.id}</div>
+      </div>`;
   }).join('');
+  openModal(`
+    <div class="modal-head">
+      <span class="dot" style="background:${col};box-shadow:0 0 7px ${col};"></span>
+      <span class="modal-title">MACHINE DETAIL</span>
+      <button class="modal-x" data-close>✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="md-title">
+        <span class="md-name">${ch.name}</span>
+        <span class="badge ${ch.status}">${STATUS_TEXT[ch.status]}</span>
+      </div>
+      <div class="md-machine">${ch.machine}</div>
+      <div class="md-meta">
+        <div class="kv"><label>CHAMBER</label><span>${ch.chamber}</span></div>
+        <div class="kv"><label>LOT</label><span>${ch.lot}</span></div>
+        <div class="kv"><label>WAFERS</label><span>${ch.wafers}</span></div>
+        <div class="kv"><label>RECIPE</label><span>${ch.recipe}</span></div>
+        <div class="kv"><label>UPTIME</label><span>${ch.uptime}</span></div>
+        <div></div>
+      </div>
+      <div class="stat-grid">
+        <div class="stat-box"><label>TEMP</label><div class="val">${ch.temp}</div></div>
+        <div class="stat-box"><label>PRESSURE</label><div class="val">${ch.pressure}</div></div>
+        <div class="stat-box"><label>RF POWER</label><div class="val">${ch.rfPower}</div></div>
+        <div class="stat-box"><label>THROUGHPUT</label><div class="val">${ch.throughput}</div></div>
+      </div>
+      <div class="findings-label">AGENT FINDINGS</div>
+      ${findings}
+    </div>`, 'detail');
 }
 
-function updateClock() {
-  document.getElementById('clock').textContent = new Date().toTimeString().slice(0,8);
+function openPlantView() {
+  const cards = TOOLS.map(t => {
+    const cls = `tool ${t.status}${t.monitored ? ' monitored' : ''}`;
+    const col = STATUS_COLOR[t.status];
+    return `
+      <div class="${cls}" ${t.monitored ? `data-ch="${t.id}"` : ''}>
+        <div class="tool-head">
+          <div class="tool-name">${t.id} <span class="dot" style="background:${col};box-shadow:0 0 7px ${col};"></span></div>
+          <div class="tool-status ${t.status}">${STATUS_TEXT[t.status]}</div>
+        </div>
+        <div class="tool-icon">${toolIcon(t.status)}</div>
+        <div class="tool-foot">
+          <span class="tool-machine">${t.machine}</span>
+          <span class="tool-bay">${t.bay}</span>
+        </div>
+      </div>`;
+  }).join('');
+  const faults = TOOLS.filter(t => t.monitored && t.status === 'fault').map(t => t.id);
+  openModal(`
+    <div class="modal-head">
+      <span class="live-dot"></span>
+      <span class="modal-title">LIVE VIEW</span>
+      <span class="modal-sub">FAB 2 · TOP-DOWN PLANT FLOOR</span>
+      <button class="modal-x" data-close>✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="pv-sub">PROCESS BAY 2 — 3 · AISLE ROUTING</div>
+      <div class="pv-grid">
+        <div class="pv-track"><i style="left:16%"></i><i style="left:50%"></i><i style="left:84%"></i></div>
+        ${cards}
+      </div>
+      <div class="pv-foot">
+        <span>${faults.length} monitored tool${faults.length === 1 ? '' : 's'} in fault — ${faults.join(', ') || 'none'}</span>
+        <span>Click a monitored tool (CHA / CHB) to open its detail</span>
+      </div>
+    </div>`, 'plant');
+  mount.querySelectorAll('.tool.monitored').forEach(el => {
+    el.addEventListener('click', () => openDetail(el.dataset.ch));
+  });
 }
-setInterval(updateClock, 1000);
-updateClock();
+document.getElementById('plantViewBtn').addEventListener('click', openPlantView);
 
-renderErrors();
-renderTrends();
-selectChamber('CHB');
+/* ───────────── CLOCK + CONTROLS ───────────── */
+let paused = false;
+function tick() { if (!paused) document.getElementById('clock').textContent = new Date().toTimeString().slice(0,8); }
+setInterval(tick, 1000); tick();
 
 document.getElementById('pauseBtn').addEventListener('click', function() {
-  this.classList.toggle('active');
-  this.textContent = this.classList.contains('active') ? 'RESUME' : 'PAUSE';
+  paused = !paused;
+  this.textContent = paused ? 'RESUME' : 'PAUSE';
+  this.classList.toggle('on', paused);
 });
 document.getElementById('soundBtn').addEventListener('click', function() {
-  this.classList.toggle('active');
-  this.textContent = this.classList.contains('active') ? 'SOUND ON' : 'SOUND OFF';
+  const on = this.classList.toggle('on');
+  this.textContent = on ? 'SOUND ON' : 'SOUND OFF';
 });
+
+/* ───────────── INIT ───────────── */
+renderCritical();
+renderChambers();
+renderErrors();
+renderTrends();
 </script>
 </body>
 </html>
