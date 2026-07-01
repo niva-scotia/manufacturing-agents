@@ -13,6 +13,7 @@
 # Only the LLM explanation step is omitted in the offline path.
 
 import json
+import os
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -100,14 +101,17 @@ def _compute_trend(values, rng, cfg):
     }
 
 
-def detect_offline(machine_df, thresholds, cfg):
+def detect_offline(machine_df, thresholds, cfg, wafer_start=None):
     """Pure-Python detection (no LLM). Returns (anomaly_log, trend_log) with the
-    same record shape production_agent.py produces."""
+    same record shape production_agent.py produces. Each record is timestamped
+    with the wafer's real run_start (via wafer_start), not the scan clock."""
     anomaly_log, trend_log = [], []
     history, trend_warned = {}, set()
-    ts = datetime.now().strftime("%H:%M:%S")
+    wafer_start = wafer_start or {}
+    now_str = datetime.now().strftime("%H:%M:%S")
     for _, row in machine_df.iterrows():
         wid, step = int(row["wafer_id"]), int(row["step"])
+        ts = _event_time(wafer_start.get(wid), now_str)   # real run_start time
         if wid not in history:
             history[wid] = {s: [] for s in thresholds}
             trend_warned = {k for k in trend_warned if k[0] == wid}
@@ -149,6 +153,22 @@ def _wafer_chamber(summary_df):
     return summary_df.set_index("wafer_id")["chamber_id"].to_dict()
 
 
+def _wafer_start(summary_df):
+    """wafer_id → run_start (raw ISO string) from the summary, for real event times."""
+    return (summary_df.set_index("wafer_id")["run_start"].to_dict()
+            if "run_start" in summary_df.columns else {})
+
+
+def _event_time(raw, fallback=""):
+    """Format a run_start value ("2024-03-04T06:02:33") to "06:02:33"."""
+    if raw is None or (isinstance(raw, float) and pd.isna(raw)):
+        return fallback
+    s = str(raw)
+    if "T" in s: return s.split("T", 1)[1][:8]
+    if " " in s: return s.split(" ", 1)[1][:8]
+    return fallback or s
+
+
 def _fmt(v, nd=1):
     try:
         return f"{float(v):.{nd}f}"
@@ -162,31 +182,43 @@ def _dev_string(value, rng):
     return f"-{rng['min'] - value:.2f} below min"
 
 
+def _secs(hms):
+    """'HH:MM:SS' → seconds since midnight (for ranking events/wafers by time)."""
+    try:
+        h, m, s = (int(x) for x in str(hms).split(":"))
+        return h * 3600 + m * 60 + s
+    except Exception:
+        return -1
+
+
 def build_payload(anomaly_log, trend_log, machine_df, summary_df, thresholds=None):
     thresholds = thresholds or THRESHOLDS
     machine_df = machine_df.copy()
     machine_df.columns = [c.strip().lower().replace(" ", "_") for c in machine_df.columns]
     w2c = _wafer_chamber(summary_df)
 
+    # Event times are already carried on each record (production_agent stamps
+    # them from run_start; detect_offline does the same). We just pull them
+    # through here — no override.
+
     # tag every log entry with its chamber
     for a in anomaly_log: a["chamber"] = w2c.get(a["wafer_id"], "CHA")
     for t in trend_log:   t["chamber"] = w2c.get(t["wafer_id"], "CHA")
 
     chambers, errors, trends, tools = {}, [], [], []
-    anm_n, trd_n = 4400, 1100
 
-    # ── incoming-error feed (anomalies first, then trends), newest-ish first ──
-    for a in anomaly_log:
-        anm_n += 1
-        a["_id"] = f"ANM-{anm_n}"
+    # ── incoming-error feed. IDs are assigned only if the caller hasn't already
+    #    set one (the real-time simulator pre-assigns stable IDs so entries don't
+    #    renumber as the feed grows). ──
+    for i, a in enumerate(anomaly_log):
+        a.setdefault("_id", f"ANM-{4401 + i}")
         errors.append({
             "chamber": a["chamber"], "pc": LABELS.get(a["sensor"], a["sensor"]), "type": "anomaly",
             "text": f"{LABELS.get(a['sensor'], a['sensor'])} out of range — {_dev_string(a['value'], {'min': a['threshold_min'], 'max': a['threshold_max']})}",
             "id": a["_id"], "time": a["timestamp"],
         })
-    for t in trend_log:
-        trd_n += 1
-        t["_id"] = f"TRD-{trd_n}"
+    for i, t in enumerate(trend_log):
+        t.setdefault("_id", f"TRD-{1101 + i}")
 
     # ── trend watch (up to 3 most advanced) ──────────────────────────────────
     def _progress(t):
@@ -215,34 +247,53 @@ def build_payload(anomaly_log, trend_log, machine_df, summary_df, thresholds=Non
         ch_trends = [t for t in trend_log   if t["chamber"] == ch]
         status = "fault" if ch_anoms else "watch" if ch_trends else "nominal"
 
-        # latest summary row for meta
-        meta = srows.sort_values("wafer_id").iloc[-1] if len(srows) else None
+        # Meta comes from the CURRENT wafer chosen BY TIME (latest run_start),
+        # not by wafer_id — wafer_id order ≠ time order across production days.
+        srows = srows.copy()
         total = len(srows)
         fails = int((srows["pass_fail"] == "FAIL").sum()) if total else 0
+        if total:
+            srows["_tod"] = srows["run_start"].map(lambda r: _secs(_event_time(r)))
+            meta = srows.sort_values("_tod").iloc[-1]      # most recent wafer BY TIME
+        else:
+            meta = None
 
-        # latest sensor snapshot for this chamber's wafers
-        ch_wafers = [w for w, c in w2c.items() if c == ch]
-        snap = machine_df[machine_df["wafer_id"].isin(ch_wafers)]
-        last = snap.sort_values(["wafer_id", "step"]).iloc[-1] if len(snap) else None
+        # Last reading of that current-by-time wafer — used only for sensors that
+        # have NOT tripped an alarm (so they show a live in-range value).
+        last = None
+        if meta is not None:
+            wrows = machine_df[machine_df["wafer_id"] == int(meta["wafer_id"])]
+            if len(wrows):
+                last = wrows.sort_values("step").iloc[-1]
 
+        # For each sensor, the MOST RECENT breach for this chamber (the reading
+        # that tripped the alarm). Updated automatically as new breaches arrive,
+        # because we keep the anomaly with the latest timestamp per sensor.
+        latest_breach = {}
+        for a in ch_anoms:
+            k = a["sensor"]
+            if k not in latest_breach or _secs(a["timestamp"]) >= _secs(latest_breach[k]["timestamp"]):
+                latest_breach[k] = a
         trended_sensors = {t["sensor"] for t in ch_trends}
-        anom_sensors    = {a["sensor"] for a in ch_anoms}
+
         sensors = []
         for key, label, unit, rng in SENSORS:
-            if last is not None and key in last:
+            if key in latest_breach:
+                # show the value that tripped the alarm (most recent breach)
+                sensors.append({"label": label, "value": _fmt(latest_breach[key]["value"], 1),
+                                "unit": unit, "status": "fault"})
+            elif last is not None and key in last:
                 val = float(last[key])
-                # tile colour reflects the CURRENT reading (out of range = fault),
-                # or an active trend on that sensor (watch).
                 sstat = "fault" if _check_anomaly(val, rng) else "watch" if key in trended_sensors else "ok"
                 sensors.append({"label": label, "value": _fmt(val, 1), "unit": unit, "status": sstat})
             else:
                 sensors.append({"label": label, "value": "—", "unit": unit, "status": "ok"})
 
         modules = [{"ok": "green", "watch": "yellow", "fault": "red"}[s["status"]] for s in sensors]
-        # A faulted chamber should read as faulted on the diagram even if the
-        # latest snapshot is back in range — flag the module of a sensor that
-        # actually faulted during the scan.
+        # If the only breached sensor isn't one of the 4 displayed (e.g. cl2_flow),
+        # still flag a module red so a faulted chamber reads as faulted.
         if status == "fault" and "red" not in modules:
+            anom_sensors = {a["sensor"] for a in ch_anoms}
             idx = next((i for i, (k, *_ ) in enumerate(SENSORS) if k in anom_sensors), 0)
             modules[idx] = "red"
 
@@ -307,13 +358,18 @@ def build_payload(anomaly_log, trend_log, machine_df, summary_df, thresholds=Non
     }
 
 
-def write_dashboard_json(payload, path=None):
+def write_dashboard_json(payload, path=None, verbose=True):
     path = Path(path) if path else (_ROOT / "front_end" / "dashboard_data.json")
     path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w") as f:
+    # Atomic write: fully write a temp file, then rename it into place. A reader
+    # (the web server) therefore never sees a half-written JSON.
+    tmp = path.with_suffix(".json.tmp")
+    with open(tmp, "w") as f:
         json.dump(payload, f, indent=2)
-    print(f"[dashboard_export] wrote {path}  "
-          f"(anomalies feed: {len(payload['errors'])}, trends: {len(payload['trends'])})")
+    os.replace(tmp, path)
+    if verbose:
+        print(f"[dashboard_export] wrote {path}  "
+              f"(anomalies feed: {len(payload['errors'])}, trends: {len(payload['trends'])})")
     return str(path)
 
 
@@ -322,7 +378,8 @@ def main():
     machine_df.columns = [c.strip().lower().replace(" ", "_") for c in machine_df.columns]
     summary_df = pd.read_csv(_ROOT / "data" / "train_summary.csv")
     print(f"[dashboard_export] scanning {len(machine_df)} rows offline (no LLM)…")
-    anomaly_log, trend_log = detect_offline(machine_df, THRESHOLDS, TREND_CONFIG)
+    anomaly_log, trend_log = detect_offline(machine_df, THRESHOLDS, TREND_CONFIG,
+                                            wafer_start=_wafer_start(summary_df))
     print(f"[dashboard_export] anomalies={len(anomaly_log)} trends={len(trend_log)}")
     payload = build_payload(anomaly_log, trend_log, machine_df, summary_df, THRESHOLDS)
     write_dashboard_json(payload)

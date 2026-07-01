@@ -140,6 +140,21 @@ print(f"Data loaded  : {data.shape[0]} rows, {data.shape[1]} columns")
 # Used to enrich fault alerts before passing them to the Quality Agent.
 _summary = pd.read_csv(str(_ROOT / "data/train_summary.csv"))
 WAFER_LOOKUP = _summary.set_index("wafer_id")[["lot_id","chamber_id"]].to_dict("index")
+
+# Build wafer → run_start lookup so each detected event is timestamped with
+# WHEN THE WAFER ACTUALLY RAN (from train_summary.csv), not the scan's clock.
+WAFER_START = _summary.set_index("wafer_id")["run_start"].to_dict()
+
+def event_time(wafer_id):
+    """Real event time (HH:MM:SS) from train_summary.run_start for this wafer.
+    Falls back to the current clock only if the wafer has no run_start."""
+    raw = WAFER_START.get(int(wafer_id))
+    if raw is None or (isinstance(raw, float) and pd.isna(raw)):
+        return datetime.now().strftime("%H:%M:%S")
+    s = str(raw)                          # e.g. "2024-03-04T06:02:33"
+    if "T" in s: return s.split("T", 1)[1][:8]
+    if " " in s: return s.split(" ", 1)[1][:8]
+    return s
 print(f"Wafers       : {data['wafer_id'].nunique()}")
 print(f"Sensors      : {len(sensor_cols)}")
 print(f"\nAvailable sensor names:")
@@ -537,7 +552,7 @@ def run_agent(data, thresholds, trend_config, max_rows=None):
                 explanation = get_llm_explanation("anomaly", sensor, details)
 
                 anomaly = {
-                    "timestamp"     : datetime.now().strftime("%H:%M:%S"),
+                    "timestamp"     : event_time(wafer_id),
                     "wafer_id"      : wafer_id,
                     "step"          : step,
                     "sensor"        : sensor,
@@ -618,7 +633,7 @@ def run_agent(data, thresholds, trend_config, max_rows=None):
                         )
 
                         trend_entry = {
-                            "timestamp"        : datetime.now().strftime("%H:%M:%S"),
+                            "timestamp"        : event_time(wafer_id),
                             "wafer_id"         : wafer_id,
                             "step"             : step,
                             "sensor"           : sensor,
