@@ -41,7 +41,7 @@ from sop_agent import (
     build_index as build_sop_index,
     run_sop_agent,
 )
-from impact_agent import run_impact_agent, load_roster
+from agents.sustainability_agent import run_impact_agent, load_roster
 from openai import OpenAI
 
 print("Imports successful.")
