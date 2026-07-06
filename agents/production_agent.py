@@ -41,7 +41,8 @@ from sop_agent import (
     build_index as build_sop_index,
     run_sop_agent,
 )
-from agents.sustainability_agent import run_impact_agent, load_roster
+from sustainability_agent import run_impact_agent, load_roster
+from supervisor_agent import run_supervisor_agent, print_supervisor_summary
 from openai import OpenAI
 
 print("Imports successful.")
@@ -128,6 +129,18 @@ print("SOP Agent vector store ready.")
 # active fault already producing out-of-spec wafers), not on pre-fault trends.
 impact_roster = load_roster()
 print("Impact Agent roster ready.")
+
+# ── Supervisor Agent initialisation ───────────────────────────────────────────
+# Final agent in the chain — synthesises every upstream output (Production,
+# Quality, Maintenance, SOP, Impact/Sustainability) into role-specific
+# recommendations for the operator, shift supervisor, quality engineer, and
+# maintenance lead. No critical action is auto-executed.
+supervisor_client = AzureOpenAI(
+    api_key        = os.getenv("AZURE_API_KEY"),
+    azure_endpoint = os.getenv("AZURE_ENDPOINT"),
+    api_version    = os.getenv("AZURE_API_VERSION"),
+)
+print("Supervisor Agent ready.")
 
 # ## Cell 4 — Load and prepare data
 
@@ -630,6 +643,25 @@ def run_agent(data, thresholds, trend_config, max_rows=None):
                           f"(mid ${ec['value']:,.0f})")
                 print(f"{'─' * 52}")
 
+                # ── Hand off to Supervisor Agent (final agent) ─────────────
+                # Synthesises every upstream output into role-specific
+                # recommendations. Reuses the Impact Agent estimate already
+                # computed above instead of recomputing it.
+                sustainability_report = {
+                    "scrap_cost_estimate": (
+                        {k: impact["expected_cost"][k] for k in ("value", "low", "high")}
+                        if impact.get("estimable") else None
+                    ),
+                    "material_waste_estimate": impact.get("remaining_wafers"),
+                    "notes": impact["narrative"],
+                }
+                supervisor_summary = run_supervisor_agent(
+                    alert, quality_report, recommendation, sop_report,
+                    sustainability_report=sustainability_report,
+                    client=supervisor_client,
+                )
+                print_supervisor_summary(supervisor_summary)
+
             else:
                 # value is within range — update history for trend analysis
                 history[wafer_id][sensor].append(value)
@@ -729,6 +761,16 @@ def run_agent(data, thresholds, trend_config, max_rows=None):
                         print("\n[SOP Agent Report]\n")
                         print(sop_report)
                         print(f"{'─' * 52}")
+
+                        # ── Hand off to Supervisor Agent (final agent) ─────
+                        # Trends are pre-fault, so the Impact Agent is not run
+                        # here — the Supervisor Agent's sustainability step
+                        # will report "not applicable" for TREND alerts.
+                        supervisor_summary = run_supervisor_agent(
+                            alert, quality_report, recommendation, sop_report,
+                            client=supervisor_client,
+                        )
+                        print_supervisor_summary(supervisor_summary)
 
     # ── Final summary ─────────────────────────────────────────────────────────
     print()
