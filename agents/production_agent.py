@@ -586,11 +586,12 @@ def run_agent(data, thresholds, trend_config, max_rows=None):
                 print(f"{'─' * 52}")
 
                 # ── Hand off to Maintenance Agent ─────────────────────────
-                # The Quality Agent report becomes the Maintenance Agent's
-                # input. It adds CMMS context (PM, parts, calibration) and a
-                # prioritised recommendation.
+                # The Maintenance Agent receives the accumulated outputs of both
+                # prior agents: the Production alert (Agent 1) AND the Quality
+                # report (Agent 2). It adds CMMS context (PM, parts, calibration)
+                # and a prioritised recommendation.
                 recommendation = run_maintenance_agent(
-                    quality_report, wo_store, pm_df, parts_df,
+                    alert, quality_report, wo_store, pm_df, parts_df,
                     calib_df, maintenance_client
                 )
                 print_recommendation(recommendation)
@@ -685,11 +686,12 @@ def run_agent(data, thresholds, trend_config, max_rows=None):
                         print(f"{'─' * 52}")
 
                         # ── Hand off to Maintenance Agent ─────────────────
-                        # The Quality Agent report becomes the Maintenance
-                        # Agent's input. It adds CMMS context (PM, parts,
-                        # calibration) and a prioritised recommendation.
+                        # The Maintenance Agent receives the accumulated outputs
+                        # of both prior agents: the Production alert (Agent 1)
+                        # AND the Quality report (Agent 2). It adds CMMS context
+                        # (PM, parts, calibration) and a prioritised recommendation.
                         recommendation = run_maintenance_agent(
-                            quality_report, wo_store, pm_df, parts_df,
+                            alert, quality_report, wo_store, pm_df, parts_df,
                             calib_df, maintenance_client
                         )
                         print_recommendation(recommendation)

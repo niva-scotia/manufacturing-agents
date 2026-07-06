@@ -89,7 +89,7 @@ def _load_production_module():
         "    return f'[mocked: {sensor}]'\n"
         "def run_quality_agent(alert, collection, client):\n"
         "    return '[mocked quality report]'\n"
-        "def run_maintenance_agent(quality_report, wo_collection, pm_df, parts_df, calib_df, client):\n"
+        "def run_maintenance_agent(alert, quality_report, wo_collection, pm_df, parts_df, calib_df, client):\n"
         "    return {'priority': 'LOW', 'sensor': '', 'chamber_id': '', 'alert_type': '', 'component': '', 'pm_status': {}, 'required_parts': [], 'calibration_status': {}, 'past_wo_patterns': '', 'recommended_actions': [], 'draft_wo_header': '', 'llm_narrative': '[mocked]'}\n"
         "def print_recommendation(rec): pass\n"
         "def run_sop_agent(alert, quality_report, recommendation, collection, client):\n"

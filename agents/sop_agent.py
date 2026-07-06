@@ -25,6 +25,7 @@ TCP Top Power (334–360 W), RF Bottom Power (124–142 W), chamber pressure (94
 """
 
 import os
+import re
 import pandas as pd
 import chromadb
 from openai import AzureOpenAI
@@ -50,6 +51,15 @@ DEFAULT_CSV_PATHS = {
     "guides":    str(_ROOT / "data/troubleshooting_guides.csv"),
     "incidents": str(_ROOT / "data/incident_resolutions.csv"),
     "manuals":   str(_ROOT / "data/equipment_manuals.csv"),
+}
+
+# Human-readable names for each knowledge base source, so the agent can state
+# exactly which kind of document / manual each piece of information came from.
+SOURCE_LABELS = {
+    "sop":       "SOP Procedure",
+    "guides":    "Troubleshooting Guide",
+    "incidents": "Incident Record",
+    "manuals":   "Equipment Manual",
 }
 
 
@@ -192,22 +202,51 @@ def build_index(csv_paths: dict = None) -> chromadb.Collection:
 
 # ── Build retrieval query ─────────────────────────────────────────────────────
 
+def _extract_quality_signals(quality_report: str) -> str:
+    """
+    Pulls the NCR summary, tool-wear, and recurrence prose out of the Quality
+    Agent report so retrieval reflects the FULL upstream picture rather than
+    just the raw alert. Returns a single condensed line.
+    """
+    if not quality_report:
+        return ""
+    sections = []
+    for label in ("NCR SUMMARY", "TOOL WEAR INDICATORS", "RECURRENCE"):
+        m = re.search(
+            rf"{label}\s*:\s*(.+?)(?=\n[A-Z][A-Z ]+:|\Z)",
+            quality_report, re.IGNORECASE | re.DOTALL
+        )
+        if m:
+            sections.append(m.group(1).strip().replace("\n", " "))
+    return " ".join(sections)
+
+
 def build_query(alert: dict,
                 quality_report: str = "",
                 recommendation: dict = None) -> str:
     """
-    Converts a Production Agent alert (plus optional upstream context) into a
-    retrieval query. The 'explanation' field is deliberately excluded — retrieval
-    must be driven by confirmed facts, not the Production Agent's hypothesis.
+    Converts the accumulated outputs of every prior agent into a retrieval query.
+    Retrieval is driven by the FULL chain picture, not just the raw alert:
+      - Agent 1 (Production)  : alert type, sensor, deviation
+      - Agent 2 (Quality)     : NCR / tool-wear / recurrence signals
+      - Agent 3 (Maintenance) : priority, component, and identified WO patterns
+    The 'explanation' field is deliberately excluded — retrieval must be driven
+    by confirmed facts, not the Production Agent's hypothesis.
     """
+    rec       = recommendation or {}
     chamber   = alert.get("chamber_id") or alert.get("chamber", "unknown")
-    priority  = (recommendation or {}).get("priority", alert.get("severity", "unknown"))
-    component = (recommendation or {}).get("component", "")
+    priority  = rec.get("priority", alert.get("severity", "unknown"))
+    component = rec.get("component", "")
+    quality_signals = _extract_quality_signals(quality_report)
+    wo_patterns     = rec.get("past_wo_patterns", "")
+
     return (
         f"{alert.get('alert_type', 'ANOMALY')} on sensor {alert['sensor']}. "
         f"Deviation: {alert.get('deviation', '')}. "
         f"Priority: {priority}. Chamber: {chamber}. "
         + (f"Component: {component}. " if component else "")
+        + (f"Quality history: {quality_signals} " if quality_signals else "")
+        + (f"Maintenance findings: {wo_patterns} " if wo_patterns else "")
         + f"Looking for SOPs, troubleshooting procedures, corrective actions, "
         f"and prior incident resolutions for {alert['sensor']} faults. "
         f"Safety requirements and escalation criteria."
@@ -254,14 +293,26 @@ You receive:
   3. A maintenance recommendation — PM status, parts availability, calibration status, priority
   4. Retrieved knowledge base documents — SOPs, troubleshooting guides, prior incidents, manual excerpts
 
-Your job: synthesize a prioritized list of exactly 3–5 next-best-action recommendations.
+Your job: surface the 3–5 MOST RELEVANT pieces of information from the retrieved
+documents for this fault. You are a retrieval/lookup agent, NOT an advisor — the
+upstream alert, quality, and maintenance context are given ONLY to help you judge
+which retrieved content is most relevant.
 
 Rules:
-- Each recommendation must cite the specific document(s) it comes from (SOP ID, guide ID, incident ID, or doc ID)
-- Order recommendations by urgency: safety first, then fault resolution, then prevention
-- Be specific to the sensor values, component names, and thresholds in the retrieved documents
-- Do not add steps not supported by the retrieved content
-- Output exactly 3–5 numbered recommendations — no more, no fewer
+- Do NOT produce recommendations, next-best-actions, opinions, or any advice of your own.
+- Report ONLY information that is actually present in the retrieved documents.
+- For each item, extract the specific relevant content as written in the source
+  (procedure steps, root causes, specifications, thresholds, prior resolutions),
+  quoting or closely paraphrasing. Do not add interpretation or conclusions.
+- Order items by relevance to the fault (most relevant first) — NOT by urgency.
+- Every item MUST state exactly where the information came from, using the
+  SOURCE TYPE and DOCUMENT ID given in the header of each retrieved document
+  (e.g. "Equipment Manual", "SOP Procedure", "Troubleshooting Guide",
+  "Incident Record"). For Equipment Manuals, also name the specific equipment
+  and section (the EQUIPMENT and SECTION fields inside the document). For SOPs
+  and guides, name the title/fault. Never cite a source that is not one of the
+  retrieved documents.
+- Output exactly 3–5 items — no more, no fewer.
 
 Output format (strict):
 
@@ -270,15 +321,15 @@ CHAMBER: [chamber ID]
 ALERT TYPE: [ANOMALY or TREND]
 PRIORITY: [CRITICAL / HIGH / MEDIUM / LOW — from maintenance recommendation]
 
-RECOMMENDATIONS:
+RELEVANT INFORMATION:
 
-1. [Short action title]
-   [2–3 sentences: what to do, why, and what to check]
-   Source: [document ID] — "[document title or section]"
+1. [Short title of the information / document section]
+   [2–4 sentences of the relevant content extracted from the document, as written]
+   Source: [SOURCE TYPE] — [DOCUMENT ID] — "[equipment name & section, or document title]"
 
-2. [Short action title]
-   [2–3 sentences]
-   Source: [document ID] — "[document title or section]"
+2. [Short title of the information / document section]
+   [2–4 sentences of the relevant content extracted from the document, as written]
+   Source: [SOURCE TYPE] — [DOCUMENT ID] — "[equipment name & section, or document title]"
 
 [Continue for 3–5 total]
 """.strip()
@@ -293,11 +344,14 @@ def synthesise_report(alert: dict,
                       client: AzureOpenAI) -> str:
     """
     Sends all three upstream outputs + retrieved KB docs to the LLM.
-    Returns 3–5 cited recommendations as structured plain text.
+    Returns the 3–5 most relevant KB entries (cited) as structured plain text.
+    The upstream context is used only to rank relevance — no recommendations
+    are generated.
     """
     cases_block = "\n\n---\n\n".join([
-        f"DOCUMENT {c['rank']} (source: {c['source']}, id: {c['id']}, "
-        f"similarity: {c['similarity']}):\n\n{c['content']}"
+        f"DOCUMENT {c['rank']} "
+        f"[SOURCE TYPE: {SOURCE_LABELS.get(c['source'], c['source'])} | "
+        f"DOCUMENT ID: {c['id']} | similarity: {c['similarity']}]:\n\n{c['content']}"
         for c in retrieved
     ])
 
@@ -368,7 +422,8 @@ def run_sop_agent(alert: dict,
       client         : AzureOpenAI client
 
     Returns:
-      report : 3–5 prioritized recommendations, each citing the source document
+      report : the 3–5 most relevant knowledge base entries, each citing its
+               source document (relevance-ranked lookup — not recommendations)
     """
     chamber = alert.get("chamber_id") or alert.get("chamber", "unknown")
     print(f"\n[SOP Agent] Alert: {alert['sensor']} "

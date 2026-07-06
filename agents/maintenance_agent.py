@@ -321,15 +321,50 @@ def determine_priority(pm_status: dict,
 
 # ── Build retrieval query + retrieve work orders ────────────────────────────────
 
-def build_wo_query(parsed: dict) -> str:
+def _extract_quality_signals(quality_report: str) -> str:
     """
-    Builds the ChromaDB query for historical work-order retrieval. Focuses on the
-    component, sensor, and chamber rather than copying the Quality report verbatim.
+    Pulls the NCR summary, tool-wear, and recurrence prose out of the Quality
+    Agent report so downstream retrieval reflects the FULL upstream picture
+    rather than just the parsed header fields. Returns a single condensed line.
     """
+    if not quality_report:
+        return ""
+    sections = []
+    for label in ("NCR SUMMARY", "TOOL WEAR INDICATORS", "RECURRENCE"):
+        m = re.search(
+            rf"{label}\s*:\s*(.+?)(?=\n[A-Z][A-Z ]+:|\Z)",
+            quality_report, re.IGNORECASE | re.DOTALL
+        )
+        if m:
+            sections.append(m.group(1).strip().replace("\n", " "))
+    return " ".join(sections)
+
+
+def build_wo_query(parsed: dict,
+                   alert: dict = None,
+                   quality_report: str = "") -> str:
+    """
+    Builds the ChromaDB query for historical work-order retrieval.
+
+    The query is assembled from the FULL upstream picture — not just this agent's
+    immediate input:
+      - Agent 1 (Production) : the raw sensor deviation, measured value, severity
+      - Agent 2 (Quality)    : the NCR summary, tool-wear, and recurrence signals
+    so the retrieved work orders match the accumulated context of both prior agents.
+    """
+    alert     = alert or {}
+    deviation = alert.get("deviation", "")
+    value     = alert.get("value", "")
+    severity  = alert.get("severity", "")
+    signals   = _extract_quality_signals(quality_report)
+
     return (
         f"{parsed['alert_type']} on sensor {parsed['sensor']} in chamber "
         f"{parsed['chamber_id']}. Component: {parsed['component']}. "
-        f"Looking for past work orders, root cause, corrective work performed, "
+        + (f"Production deviation: {deviation} (measured {value}, "
+           f"severity {severity}). " if deviation or value else "")
+        + (f"Quality history: {signals} " if signals else "")
+        + f"Looking for past work orders, root cause, corrective work performed, "
         f"parts replaced, and time to repair for {parsed['sensor']} faults on a "
         f"plasma etch chamber. Recurrence and resolution history."
     )
@@ -365,14 +400,16 @@ SYSTEM_PROMPT = """
 You are the Maintenance Agent in a semiconductor manufacturing pipeline for a
 plasma etch chamber.
 
-You receive:
-  1. A Quality Agent report — sensor, chamber, NCR summary, tool wear indicators,
+You receive (the accumulated outputs of every prior agent in the chain):
+  1. A Production Agent alert — the raw sensor deviation, measured value,
+     threshold, severity, and wafer/lot that triggered this event.
+  2. A Quality Agent report — sensor, chamber, NCR summary, tool wear indicators,
      recurrence.
-  2. CMMS FACTS that have ALREADY been computed deterministically before you were
+  3. CMMS FACTS that have ALREADY been computed deterministically before you were
      called: PM status, spare-parts availability, calibration status, and the
      final priority.
-  3. Retrieved historical work orders — the most relevant past WOs, found by
-     semantic similarity.
+  4. Retrieved historical work orders — the most relevant past WOs, found by
+     semantic similarity to the full upstream picture.
 
 Your job is to synthesise a maintenance recommendation.
 
@@ -415,13 +452,18 @@ def synthesise_recommendation(parsed: dict,
                               retrieved_wos: list[dict],
                               quality_report: str,
                               priority: str,
-                              client: AzureOpenAI) -> dict:
+                              client: AzureOpenAI,
+                              alert: dict = None) -> dict:
     """
     Sends every deterministic fact + the retrieved WOs to the LLM and asks for the
     recommendation narrative/actions/draft WO. Returns the full output dict.
     The deterministic fields (priority, pm_status, parts, calibration) are injected
     by the caller — they are never taken from the LLM.
+
+    The LLM sees the FULL upstream picture: the Production alert (Agent 1 output)
+    and the Quality report (Agent 2 output), plus the deterministic CMMS facts.
     """
+    alert = alert or {}
     wo_block = "\n\n---\n\n".join([
         f"RETRIEVED WORK ORDER {w['rank']} "
         f"(similarity: {w['similarity']}):\n\n{w['content']}"
@@ -447,8 +489,24 @@ def synthesise_recommendation(parsed: dict,
            if pm_status['full_pm_wafers_until'] is not None else "")
     )
 
+    prod_block = (
+        f"PRODUCTION AGENT ALERT (Agent 1 output)\n{'='*50}\n"
+        f"Alert type    : {alert.get('alert_type', parsed['alert_type'])}\n"
+        f"Sensor        : {alert.get('sensor', parsed['sensor'])}\n"
+        f"Measured value: {alert.get('value', 'N/A')}\n"
+        f"Threshold     : min={alert.get('threshold_min', 'N/A')} / "
+        f"max={alert.get('threshold_max', 'N/A')}\n"
+        f"Deviation     : {alert.get('deviation', 'N/A')}\n"
+        f"Severity      : {alert.get('severity', 'N/A')}\n"
+        f"Wafer / Lot   : {alert.get('wafer_id', 'N/A')} / {alert.get('lot_id', 'N/A')}\n"
+        + (f"Time to breach: {alert.get('time_to_breach')}\n"
+           if alert.get('alert_type') == 'TREND' else "")
+        + "\n"
+    ) if alert else ""
+
     user_msg = (
-        f"QUALITY AGENT REPORT\n{'='*50}\n{quality_report}\n\n"
+        f"{prod_block}"
+        f"QUALITY AGENT REPORT (Agent 2 output)\n{'='*50}\n{quality_report}\n\n"
         f"{'='*50}\n"
         f"CMMS FACTS (deterministic — use verbatim)\n{'='*50}\n"
         f"Priority (FINAL, do not change): {priority}\n"
@@ -508,18 +566,23 @@ def synthesise_recommendation(parsed: dict,
 
 # ── Main pipeline function ──────────────────────────────────────────────────────
 
-def run_maintenance_agent(quality_report: str,
+def run_maintenance_agent(alert: dict,
+                          quality_report: str,
                           wo_collection: chromadb.Collection,
                           pm_df: pd.DataFrame,
                           parts_df: pd.DataFrame,
                           calib_df: pd.DataFrame,
                           client: AzureOpenAI) -> dict:
     """
-    Full Maintenance Agent pipeline. Called by the Production Agent after the
-    Quality Agent produces its report.
+    Full Maintenance Agent pipeline (Agent 3 in the chain). Called by the
+    Production Agent after the Quality Agent produces its report.
+
+    This agent receives the accumulated outputs of BOTH prior agents:
+    the Production alert (Agent 1) and the Quality report (Agent 2).
 
     Args:
-      quality_report : structured text from the Quality Agent (one fault)
+      alert          : normalized alert dict from the Production Agent (Agent 1)
+      quality_report : structured text from the Quality Agent (Agent 2)
       wo_collection  : ChromaDB collection of historical work orders
       pm_df          : CMMS PM schedule
       parts_df       : CMMS spare parts inventory
@@ -529,7 +592,21 @@ def run_maintenance_agent(quality_report: str,
     Returns:
       A structured recommendation dict (ready for the web app UI).
     """
+    alert  = alert or {}
     parsed = parse_quality_report(quality_report)
+
+    # The Production alert (Agent 1) is the authoritative source for the sensor /
+    # chamber / alert-type identifiers — fall back to it when the Quality report
+    # header could not be parsed, so retrieval never runs on UNKNOWN fields.
+    if parsed["sensor"] == "UNKNOWN":
+        parsed["sensor"] = alert.get("sensor", "UNKNOWN")
+    if parsed["chamber_id"] == "UNKNOWN":
+        parsed["chamber_id"] = alert.get("chamber_id") or alert.get("chamber", "UNKNOWN")
+    if parsed["alert_type"] == "UNKNOWN":
+        parsed["alert_type"] = alert.get("alert_type", "UNKNOWN")
+    if parsed["component"] == "UNKNOWN":
+        parsed["component"] = SENSOR_TO_COMPONENT.get(parsed["sensor"], "UNKNOWN")
+
     print(f"\n[Maintenance Agent] Fault: {parsed['sensor']} "
           f"({parsed['component']}) on {parsed['chamber_id']} "
           f"[{parsed['alert_type']}]")
@@ -544,8 +621,10 @@ def run_maintenance_agent(quality_report: str,
           f"PM overdue: {pm_status['overdue_items'] or 'none'} | "
           f"Calibration: {calib_status['status']}")
 
-    # RAG retrieval of historical work orders
-    query     = build_wo_query(parsed)
+    # RAG retrieval of historical work orders — driven by the FULL upstream
+    # picture (Production deviation + Quality NCR/recurrence signals), not just
+    # this agent's immediate input.
+    query     = build_wo_query(parsed, alert, quality_report)
     retrieved = retrieve_work_orders(wo_collection, query, top_k=TOP_K)
     print(f"[Maintenance Agent] Retrieved {len(retrieved)} work orders. "
           f"Best similarity: {retrieved[0]['similarity']:.4f}")
@@ -553,7 +632,7 @@ def run_maintenance_agent(quality_report: str,
     # LLM synthesis
     return synthesise_recommendation(
         parsed, pm_status, parts_status, calib_status,
-        retrieved, quality_report, priority, client
+        retrieved, quality_report, priority, client, alert
     )
 
 
@@ -587,14 +666,14 @@ def print_recommendation(rec: dict) -> None:
 
     print(f"\nPAST WO PATTERNS:\n  {rec['past_wo_patterns']}")
 
-    print(f"\nRECOMMENDED ACTIONS:")
-    for action in rec["recommended_actions"]:
-        print(f"  {action}")
+    #print(f"\nRECOMMENDED ACTIONS:")
+    #for action in rec["recommended_actions"]:
+       #print(f"  {action}")
 
     print(f"\nDRAFT WORK ORDER:\n{rec['draft_wo_header']}")
 
-    print(f"\nNARRATIVE:\n  {rec['llm_narrative']}")
-    print(f"{'='*70}\n")
+    #print(f"\nNARRATIVE:\n  {rec['llm_narrative']}") #do not inform SOP agent the narative - might lead to biased outcomes
+    #print(f"{'='*70}\n")
 
 
 # ── Entry point (standalone demo / test) ────────────────────────────────────────
@@ -659,9 +738,29 @@ if __name__ == "__main__":
         ),
     ]
 
-    for i, report in enumerate(quality_reports, 1):
+    # Stub Production alerts (Agent 1 output) paired with each Quality report,
+    # so the standalone demo exercises the full-picture chain input.
+    stub_alerts = [
+        {"alert_type": "ANOMALY", "wafer_id": 2915, "lot_id": "LOT_29B",
+         "chamber_id": "CHA", "sensor": "tcp_top_pwr", "value": 410.0,
+         "threshold_min": 334.0, "threshold_max": 360.0,
+         "deviation": "+50W above set-point", "severity": "HIGH",
+         "step": 12, "time_to_breach": None},
+        {"alert_type": "ANOMALY", "wafer_id": 3122, "lot_id": "LOT_31A",
+         "chamber_id": "CHA", "sensor": "rf_btm_pwr", "value": 150.0,
+         "threshold_min": 124.0, "threshold_max": 142.0,
+         "deviation": "+8W above set-point", "severity": "HIGH",
+         "step": 9, "time_to_breach": None},
+        {"alert_type": "TREND", "wafer_id": 3300, "lot_id": "LOT_33C",
+         "chamber_id": "CHB", "sensor": "pressure", "value": 1350.0,
+         "threshold_min": 942.0, "threshold_max": 1420.0,
+         "deviation": "trending increasing toward upper limit", "severity": "MEDIUM",
+         "step": 15, "time_to_breach": "12 minutes"},
+    ]
+
+    for i, (alert, report) in enumerate(zip(stub_alerts, quality_reports), 1):
         print(f"\n{'#'*70}")
         print(f"TEST CASE {i}/{len(quality_reports)}")
         print(f"{'#'*70}")
-        rec = run_maintenance_agent(report, wo_collection, pm_df, parts_df, calib_df, client)
+        rec = run_maintenance_agent(alert, report, wo_collection, pm_df, parts_df, calib_df, client)
         print_recommendation(rec)
