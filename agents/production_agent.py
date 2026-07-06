@@ -41,6 +41,7 @@ from sop_agent import (
     build_index as build_sop_index,
     run_sop_agent,
 )
+from impact_agent import run_impact_agent, load_roster
 from openai import OpenAI
 
 print("Imports successful.")
@@ -120,6 +121,13 @@ sop_client = AzureOpenAI(
     api_version    = os.getenv("AZURE_API_VERSION"),
 )
 print("SOP Agent vector store ready.")
+
+# ── Impact Agent initialisation ───────────────────────────────────────────────
+# Loads the wafer/lot roster once — used to count how many wafers remain in the
+# current lot on the faulty chamber. The Impact Agent runs on ANOMALIES only (an
+# active fault already producing out-of-spec wafers), not on pre-fault trends.
+impact_roster = load_roster()
+print("Impact Agent roster ready.")
 
 # ## Cell 4 — Load and prepare data
 
@@ -603,6 +611,23 @@ def run_agent(data, thresholds, trend_config, max_rows=None):
                 )
                 print("\n[SOP Agent Report]\n")
                 print(sop_report)
+                print(f"{'─' * 52}")
+
+                # ── Hand off to Impact Agent (Agent 5) ────────────────
+                # Active anomaly → estimate the scrap cost if this faulty chamber
+                # keeps running the REST OF THE CURRENT LOT uncorrected.
+                impact = run_impact_agent(
+                    alert, quality_report, recommendation, sop_report,
+                    roster=impact_roster
+                )
+                print("\n[Impact Agent Report]\n")
+                print(impact["narrative"])
+                if impact.get("estimable"):
+                    ec = impact["expected_cost"]
+                    print(f"  Remaining {impact['chamber_id']} wafers in lot: "
+                          f"{impact['remaining_wafers']}")
+                    print(f"  Expected scrap cost: ${ec['low']:,.0f}–${ec['high']:,.0f} "
+                          f"(mid ${ec['value']:,.0f})")
                 print(f"{'─' * 52}")
 
             else:
