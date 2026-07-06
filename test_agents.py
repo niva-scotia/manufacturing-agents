@@ -85,6 +85,8 @@ def _load_production_module():
         "maintenance_client = None\n"
         "sop_store      = None\n"
         "sop_client     = None\n"
+        "def event_time(wafer_id):\n"
+        "    return '00:00:00'\n"
         "def get_llm_explanation(event_type, sensor, details):\n"
         "    return f'[mocked: {sensor}]'\n"
         "def run_quality_agent(alert, collection, client):\n"
@@ -94,6 +96,11 @@ def _load_production_module():
         "def print_recommendation(rec): pass\n"
         "def run_sop_agent(alert, quality_report, recommendation, collection, client):\n"
         "    return '[mocked sop report]'\n"
+        "impact_roster = None\n"
+        "def load_roster(*a, **k):\n"
+        "    return None\n"
+        "def run_impact_agent(alert, quality_report=None, recommendation=None, sop_report=None, roster=None, client=None, price_provider=None):\n"
+        "    return {'narrative': '[mocked impact]', 'estimable': False}\n"
         + src[start:stop]
     )
 
@@ -1040,6 +1047,726 @@ class TestNormalizeAlert(unittest.TestCase):
 
 
 # =============================================================================
+# Sustainability (Impact) Agent tests
+# =============================================================================
+# Estimates the scrap cost of continuing to run a faulty chamber for the rest of
+# the current lot. Pure Python (pandas only) — no Azure/LLM calls.
+#
+# Synthetic roster (every count hand-checkable):
+#   LOT_A (6 wafers, alternating): 101 CHA,102 CHB,103 CHA,104 CHB,105 CHA,106 CHB
+#     -> CHA = [101,103,105]   CHB = [102,104,106]
+#   LOT_B (single chamber): 201 CHA, 202 CHA
+#   LOT_C (unmapped chamber): 301 CHZ
+
+import time
+
+from cost_model import (
+    scrap_cost_per_wafer, machine_for_chamber, ScrapPriceProvider,
+    StaticScrapPriceProvider, WebSearchScrapPriceProvider,
+)
+from sustainability_agent import (
+    load_roster, remaining_faulty_chamber_wafers, estimate_scrap_impact,
+    narrate, run_impact_agent,
+)
+
+_SUMMARY  = DATA_DIR / "train_summary.csv"
+_HAS_DATA = _SUMMARY.exists()
+
+
+def _roster(rows):
+    """Build a roster DataFrame with the '_rs' datetime column load_roster adds."""
+    df = pd.DataFrame(rows, columns=["wafer_id", "lot_id", "chamber_id", "run_start"])
+    df["_rs"] = pd.to_datetime(df["run_start"])
+    return df.sort_values("_rs").reset_index(drop=True)
+
+
+def _synthetic_roster():
+    return _roster([
+        (101, "LOT_A", "CHA", "2024-01-01T00:00:00"),
+        (102, "LOT_A", "CHB", "2024-01-01T00:01:00"),
+        (103, "LOT_A", "CHA", "2024-01-01T00:02:00"),
+        (104, "LOT_A", "CHB", "2024-01-01T00:03:00"),
+        (105, "LOT_A", "CHA", "2024-01-01T00:04:00"),
+        (106, "LOT_A", "CHB", "2024-01-01T00:05:00"),
+        (201, "LOT_B", "CHA", "2024-01-01T01:00:00"),
+        (202, "LOT_B", "CHA", "2024-01-01T01:01:00"),
+        (301, "LOT_C", "CHZ", "2024-01-01T02:00:00"),   # unmapped chamber
+    ])
+
+
+def _sa_alert(wafer_id, lot_id="LOT_A", chamber_id="CHA",
+              sensor="tcp_top_pwr", alert_type="ANOMALY", **extra):
+    a = {"wafer_id": wafer_id, "lot_id": lot_id, "chamber_id": chamber_id,
+         "sensor": sensor, "alert_type": alert_type, "severity": "HIGH"}
+    a.update(extra)
+    return a
+
+
+class SpyProvider(ScrapPriceProvider):
+    """Returns fixed cheap numbers and records the context it was called with."""
+    def __init__(self, value=100.0, low=50.0, high=150.0):
+        self.value, self.low, self.high = value, low, high
+        self.contexts = []
+
+    def scrap_cost_per_wafer(self, chamber_id, context=None):
+        self.contexts.append(context)
+        return {"value": self.value, "low": self.low, "high": self.high, "source": "spy"}
+
+
+class FakeLLMClient:
+    """Mimics client.chat.completions.create(...).choices[0].message.content."""
+    def __init__(self, text="LLM NARRATION"):
+        self.text = text
+        self.calls = []
+        self.chat = self
+        self.completions = self
+
+    def create(self, **kwargs):
+        self.calls.append(kwargs)
+        msg = type("M", (), {"content": self.text})()
+        choice = type("C", (), {"message": msg})()
+        return type("R", (), {"choices": [choice]})()
+
+
+class _SyntheticRosterCase(unittest.TestCase):
+    """Base class: builds the hand-checkable synthetic roster before each test."""
+    def setUp(self):
+        self.roster = _synthetic_roster()
+
+
+class TestCountingAndAttribution(_SyntheticRosterCase):
+
+    def test_first_wafer_counts_all_chamber_wafers(self):
+        r = remaining_faulty_chamber_wafers(101, "LOT_A", "CHA", self.roster)
+        self.assertTrue(r["found"])
+        self.assertEqual(r["remaining_count"], 3)
+        self.assertEqual(r["remaining_wafer_ids"], [101, 103, 105])
+
+    def test_mid_wafer_counts_fewer(self):
+        r = remaining_faulty_chamber_wafers(103, "LOT_A", "CHA", self.roster)
+        self.assertEqual(r["remaining_count"], 2)
+        self.assertEqual(r["remaining_wafer_ids"], [103, 105])
+
+    def test_last_wafer_counts_one(self):
+        r = remaining_faulty_chamber_wafers(105, "LOT_A", "CHA", self.roster)
+        self.assertEqual(r["remaining_count"], 1)
+        self.assertEqual(r["remaining_wafer_ids"], [105])
+
+    def test_current_wafer_is_included(self):
+        # The triggering wafer is itself bad, so it must be counted.
+        r = remaining_faulty_chamber_wafers(105, "LOT_A", "CHA", self.roster)
+        self.assertIn(105, r["remaining_wafer_ids"])
+
+    def test_attribution_is_faulty_chamber_only(self):
+        # CHA fault must NOT count the whole 6-wafer lot — only CHA's 3.
+        r = remaining_faulty_chamber_wafers(101, "LOT_A", "CHA", self.roster)
+        self.assertEqual(r["remaining_count"], 3)
+        self.assertEqual(r["lot_chamber_total"], 3)
+        self.assertEqual(r["lot_total"], 6)
+
+    def test_cross_chamber_invariant(self):
+        # CHA-first + CHB-first == lot_total (partition, no double-count).
+        cha = remaining_faulty_chamber_wafers(101, "LOT_A", "CHA", self.roster)["remaining_count"]
+        chb = remaining_faulty_chamber_wafers(102, "LOT_A", "CHB", self.roster)["remaining_count"]
+        self.assertEqual(cha + chb, 6)
+
+    def test_single_chamber_lot(self):
+        r = remaining_faulty_chamber_wafers(201, "LOT_B", "CHA", self.roster)
+        self.assertEqual(r["remaining_count"], 2)
+        self.assertEqual(r["lot_total"], 2)
+
+    def test_monotonic_decrease_through_lot(self):
+        counts = [remaining_faulty_chamber_wafers(w, "LOT_A", "CHA", self.roster)["remaining_count"]
+                  for w in (101, 103, 105)]
+        self.assertEqual(counts, [3, 2, 1])
+        for i in range(len(counts) - 1):
+            self.assertGreater(counts[i], counts[i + 1])
+
+    def test_wafer_not_in_roster(self):
+        r = remaining_faulty_chamber_wafers(999, "LOT_A", "CHA", self.roster)
+        self.assertFalse(r["found"])
+        self.assertIn("999", r["reason"])
+
+    def test_lot_not_in_roster(self):
+        r = remaining_faulty_chamber_wafers(101, "LOT_MISSING", "CHA", self.roster)
+        self.assertFalse(r["found"])
+        self.assertIn("LOT_MISSING", r["reason"])
+
+    def test_chamber_mismatch_behaviour(self):
+        # Requested chamber != wafer's own chamber: counts the requested chamber's
+        # wafers at/after the current wafer's time. (Can't happen in the pipeline.)
+        r = remaining_faulty_chamber_wafers(101, "LOT_A", "CHB", self.roster)
+        self.assertEqual(r["remaining_count"], 3)
+        self.assertNotIn(101, r["remaining_wafer_ids"])
+
+
+class TestArithmetic(_SyntheticRosterCase):
+
+    def test_expected_cost_is_count_times_price(self):
+        est = estimate_scrap_impact(_sa_alert(101), self.roster)  # 3 wafers, $2000
+        self.assertTrue(est["estimable"])
+        self.assertEqual(est["remaining_wafers"], 3)
+        pw, ec = est["per_wafer_cost"], est["expected_cost"]
+        self.assertAlmostEqual(ec["value"], 3 * pw["value"], places=2)
+        self.assertAlmostEqual(ec["low"], 3 * pw["low"], places=2)
+        self.assertAlmostEqual(ec["high"], 3 * pw["high"], places=2)
+
+    def test_cost_range_is_ordered(self):
+        est = estimate_scrap_impact(_sa_alert(101), self.roster)
+        for block in (est["per_wafer_cost"], est["expected_cost"]):
+            self.assertLessEqual(block["low"], block["value"])
+            self.assertLessEqual(block["value"], block["high"])
+
+    def test_not_estimable_has_no_cost_but_keeps_metadata(self):
+        est = estimate_scrap_impact(_sa_alert(999), self.roster)
+        self.assertFalse(est["estimable"])
+        self.assertIn("reason", est)
+        self.assertNotIn("expected_cost", est)
+        self.assertIn("per_wafer_cost", est)
+        self.assertIn("assumptions", est)
+
+
+class TestInputRobustness(_SyntheticRosterCase):
+
+    def test_accepts_chamber_key_instead_of_chamber_id(self):
+        a = {"wafer_id": 101, "lot_id": "LOT_A", "chamber": "CHA", "sensor": "x"}
+        est = estimate_scrap_impact(a, self.roster)
+        self.assertEqual(est["chamber_id"], "CHA")
+        self.assertTrue(est["estimable"])
+
+    def test_string_wafer_id_is_coerced(self):
+        est = estimate_scrap_impact(_sa_alert("101"), self.roster)
+        self.assertTrue(est["estimable"])
+        self.assertEqual(est["remaining_wafers"], 3)
+
+    def test_missing_lot_id_is_not_estimable(self):
+        a = {"wafer_id": 101, "chamber_id": "CHA", "sensor": "x"}
+        self.assertFalse(estimate_scrap_impact(a, self.roster)["estimable"])
+
+    def test_missing_sensor_defaults(self):
+        a = {"wafer_id": 101, "lot_id": "LOT_A", "chamber_id": "CHA"}
+        self.assertEqual(estimate_scrap_impact(a, self.roster)["sensor"], "UNKNOWN")
+
+    def test_missing_wafer_id_raises(self):
+        with self.assertRaises(KeyError):
+            estimate_scrap_impact({"lot_id": "LOT_A", "chamber_id": "CHA"}, self.roster)
+
+    def test_unmapped_chamber_uses_default_cost(self):
+        est = estimate_scrap_impact(_sa_alert(301, lot_id="LOT_C", chamber_id="CHZ"), self.roster)
+        self.assertTrue(est["estimable"])
+        self.assertEqual(est["remaining_wafers"], 1)
+        self.assertEqual(est["machine"], "UNKNOWN")
+        self.assertEqual(est["per_wafer_cost"]["value"], 2000.0)
+
+
+class TestProviderSeam(_SyntheticRosterCase):
+
+    def test_default_provider_is_static(self):
+        est = estimate_scrap_impact(_sa_alert(101), self.roster)
+        self.assertEqual(est["per_wafer_cost"]["value"], scrap_cost_per_wafer("CHA")["value"])
+
+    def test_injected_provider_is_used(self):
+        est = estimate_scrap_impact(_sa_alert(101), self.roster,
+                                    price_provider=SpyProvider(100, 50, 150))
+        self.assertEqual(est["per_wafer_cost"]["value"], 100.0)
+        self.assertAlmostEqual(est["expected_cost"]["value"], 3 * 100.0, places=2)
+
+    def test_provider_receives_context(self):
+        spy = SpyProvider()
+        estimate_scrap_impact(_sa_alert(101, sensor="rf_btm_pwr"), self.roster, price_provider=spy)
+        self.assertTrue(spy.contexts)
+        self.assertEqual(spy.contexts[0]["sensor"], "rf_btm_pwr")
+
+    def test_websearch_provider_is_stub(self):
+        with self.assertRaises(NotImplementedError):
+            WebSearchScrapPriceProvider().scrap_cost_per_wafer("CHA")
+
+    def test_websearch_provider_builds_query(self):
+        q = WebSearchScrapPriceProvider()._build_query("CHA", {"sensor": "tcp_top_pwr"})
+        self.assertIn("200", q)
+        self.assertIn("tcp_top_pwr", q)
+
+
+class TestNarrator(_SyntheticRosterCase):
+
+    def test_narrate_deterministic_without_client(self):
+        est = estimate_scrap_impact(_sa_alert(101), self.roster)
+        text = narrate(est, client=None)
+        self.assertIn("approximately", text)
+        self.assertIn("CHA", text)
+        self.assertIn("LOT_A", text)
+        self.assertIn(f"{est['expected_cost']['value']:,.0f}", text)
+
+    def test_narrate_non_estimable(self):
+        est = estimate_scrap_impact(_sa_alert(999), self.roster)
+        self.assertIn("not estimable", narrate(est, client=None).lower())
+
+    def test_narrate_with_mock_llm(self):
+        est = estimate_scrap_impact(_sa_alert(101), self.roster)
+        fake = FakeLLMClient("SUPERVISOR SUMMARY")
+        text = narrate(est, client=fake, model="gpt-x")
+        self.assertEqual(text, "SUPERVISOR SUMMARY")
+        self.assertEqual(len(fake.calls), 1)
+
+
+class TestDeterminism(_SyntheticRosterCase):
+
+    def test_estimate_is_pure(self):
+        a = _sa_alert(103)
+        self.assertEqual(estimate_scrap_impact(a, self.roster),
+                         estimate_scrap_impact(a, self.roster))
+
+
+class TestCostModel(unittest.TestCase):
+
+    def test_scrap_cost_known_chamber(self):
+        c = scrap_cost_per_wafer("CHA")
+        self.assertLessEqual(c["low"], c["value"])
+        self.assertLessEqual(c["value"], c["high"])
+        self.assertEqual(c["value"], 2000.0)
+        self.assertEqual(c["low"], 1500.0)
+        self.assertEqual(c["high"], 2500.0)
+
+    def test_scrap_cost_unknown_chamber_default(self):
+        c = scrap_cost_per_wafer("CHZ")
+        self.assertEqual(c["value"], 2000.0)
+        self.assertIn("default", c["source"])
+
+    def test_machine_lookup(self):
+        self.assertEqual(machine_for_chamber("CHA")["wafer_diameter_mm"], 200)
+        self.assertIsNone(machine_for_chamber("CHZ"))
+
+
+@unittest.skipUnless(_HAS_DATA, "train_summary.csv not present")
+class TestSustainabilityRealData(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.roster = load_roster()
+
+    def test_load_roster_shape(self):
+        self.assertGreater(len(self.roster), 0)
+        self.assertIn("_rs", self.roster.columns)
+        self.assertTrue(self.roster["_rs"].is_monotonic_increasing)
+
+    def test_known_real_counts_and_cost(self):
+        # Verified against the shipped roster (LOT_29A, CHA has 11 wafers).
+        est = estimate_scrap_impact(_sa_alert(2901, lot_id="LOT_29A", chamber_id="CHA"), self.roster)
+        self.assertEqual(est["remaining_wafers"], 11)
+        self.assertEqual(est["lot_total"], 22)
+        self.assertAlmostEqual(est["expected_cost"]["value"], 11 * 2000.0, places=2)
+
+    def test_real_count_shrinks_later_in_lot(self):
+        first = estimate_scrap_impact(_sa_alert(2901, lot_id="LOT_29A", chamber_id="CHA"), self.roster)
+        later = estimate_scrap_impact(_sa_alert(2913, lot_id="LOT_29A", chamber_id="CHA"), self.roster)
+        self.assertLess(later["remaining_wafers"], first["remaining_wafers"])
+
+    def test_run_impact_agent_end_to_end(self):
+        out = run_impact_agent(_sa_alert(2901, lot_id="LOT_29A", chamber_id="CHA"))
+        self.assertTrue(out["estimable"])
+        self.assertIn("narrative", out)
+        self.assertTrue(out["narrative"])
+
+
+class TestSustainabilityPerformance(_SyntheticRosterCase):
+
+    def test_many_estimates_are_fast(self):
+        prov = StaticScrapPriceProvider()
+        t0 = time.perf_counter()
+        for _ in range(2000):
+            estimate_scrap_impact(_sa_alert(101), self.roster, price_provider=prov)
+        self.assertLess(time.perf_counter() - t0, 10.0)
+
+
+@unittest.skipUnless(_HAS_DATA, "train_summary.csv not present")
+class TestWafersLeftInLot(unittest.TestCase):
+    """Verifies remaining-wafer counting against an INDEPENDENT ground truth."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.roster = load_roster()
+
+    def test_remaining_wafers_count_is_correct(self):
+        lot_id, chamber = "LOT_29A", "CHA"
+        # Independent ground truth: list the faulty chamber's wafers in TIME order
+        # and count from the chosen wafer to the end (list POSITION, not the agent's
+        # timestamp filter) — a genuine cross-check, not a re-implementation.
+        lot = self.roster[self.roster["lot_id"] == lot_id].sort_values("_rs")
+        chamber_wafers = lot[lot["chamber_id"] == chamber]["wafer_id"].tolist()
+        self.assertTrue(chamber_wafers, "no wafers found for this lot/chamber")
+
+        mid = len(chamber_wafers) // 2
+        wafer_id = chamber_wafers[mid]
+        expected_remaining = len(chamber_wafers) - mid   # inclusive of current wafer
+
+        alert = {"wafer_id": wafer_id, "lot_id": lot_id, "chamber_id": chamber,
+                 "sensor": "tcp_top_pwr", "alert_type": "ANOMALY"}
+        est = estimate_scrap_impact(alert, self.roster)
+        self.assertTrue(est["estimable"], "estimate should be produced")
+        self.assertEqual(est["remaining_wafers"], expected_remaining)
+
+
+# =============================================================================
+# Pipeline propagation — chamber/lot/sensor carried across ALL five agents
+# =============================================================================
+# Swaps the plain stubs in the loaded production module for RECORDING mocks, runs
+# run_agent on a single controlled anomaly (wafer 2915 / CHA / tcp_top_pwr), then
+# asserts the SAME identity fields and each upstream OUTPUT reach every downstream
+# agent. This is the only test that exercises the real wiring end-to-end.
+
+import maintenance_agent as ma
+import sop_agent as so
+
+
+class TestPipelinePropagation(unittest.TestCase):
+
+    def setUp(self):
+        # Known outputs so we can assert they are forwarded intact.
+        self.q_report       = "QUALITY_REPORT_X"
+        self.recommendation = {"priority": "HIGH", "component": "TCP_GENERATOR",
+                               "sensor": "tcp_top_pwr", "chamber_id": "CHA"}
+        self.sop_report     = "SOP_REPORT_X"
+
+        # Save originals and install recording mocks on the loaded prod module.
+        self._orig = {n: getattr(prod, n) for n in (
+            "run_quality_agent", "run_maintenance_agent", "run_sop_agent",
+            "run_impact_agent", "print_recommendation")}
+        prod.run_quality_agent    = MagicMock(return_value=self.q_report)
+        prod.run_maintenance_agent = MagicMock(return_value=self.recommendation)
+        prod.run_sop_agent        = MagicMock(return_value=self.sop_report)
+        prod.run_impact_agent     = MagicMock(return_value={"narrative": "[mock]",
+                                                            "estimable": False})
+        prod.print_recommendation = MagicMock()
+
+        # One row that breaches tcp_top_pwr only; other sensors in range (no trend).
+        df = pd.DataFrame([{
+            "wafer_id": 2915, "step": 12,
+            "tcp_top_pwr": 410.0,   # > 360 -> anomaly
+            "bcl3_flow": 750.0, "cl2_flow": 752.0,
+            "pressure": 1000.0, "rf_btm_pwr": 130.0,
+        }])
+        prod.run_agent(data=df, thresholds=THRESHOLDS,
+                       trend_config=TREND_CONFIG, max_rows=None)
+
+    def tearDown(self):
+        for n, fn in self._orig.items():
+            setattr(prod, n, fn)
+
+    def test_production_alert_reaches_quality(self):
+        alert = prod.run_quality_agent.call_args.args[0]
+        self.assertEqual(alert["wafer_id"], 2915)
+        self.assertEqual(alert["sensor"], "tcp_top_pwr")
+        self.assertEqual(alert["chamber_id"], "CHA")
+        self.assertEqual(alert["lot_id"], "LOT_29B")
+
+    def test_quality_report_forwarded_to_maintenance(self):
+        args = prod.run_maintenance_agent.call_args.args
+        self.assertEqual(args[0]["wafer_id"], 2915)   # Agent 1 alert
+        self.assertEqual(args[1], self.q_report)       # Agent 2 output
+
+    def test_alert_and_reports_forwarded_to_sop(self):
+        args = prod.run_sop_agent.call_args.args
+        self.assertEqual(args[0]["sensor"], "tcp_top_pwr")  # Agent 1
+        self.assertEqual(args[1], self.q_report)            # Agent 2
+        self.assertEqual(args[2], self.recommendation)      # Agent 3
+
+    def test_all_upstream_forwarded_to_impact(self):
+        args = prod.run_impact_agent.call_args.args
+        self.assertEqual(args[0]["wafer_id"], 2915)     # Agent 1 alert
+        self.assertEqual(args[0]["chamber_id"], "CHA")
+        self.assertEqual(args[0]["sensor"], "tcp_top_pwr")
+        self.assertEqual(args[1], self.q_report)         # Agent 2
+        self.assertEqual(args[2], self.recommendation)   # Agent 3
+        self.assertEqual(args[3], self.sop_report)       # Agent 4
+
+    def test_identity_consistent_across_every_boundary(self):
+        a_q = prod.run_quality_agent.call_args.args[0]
+        a_m = prod.run_maintenance_agent.call_args.args[0]
+        a_s = prod.run_sop_agent.call_args.args[0]
+        a_i = prod.run_impact_agent.call_args.args[0]
+        for a in (a_m, a_s, a_i):
+            self.assertEqual(a["wafer_id"],   a_q["wafer_id"])
+            self.assertEqual(a["chamber_id"], a_q["chamber_id"])
+            self.assertEqual(a["lot_id"],     a_q["lot_id"])
+            self.assertEqual(a["sensor"],     a_q["sensor"])
+
+
+# =============================================================================
+# Maintenance Agent
+# =============================================================================
+
+class TestMaintenanceDeterministic(unittest.TestCase):
+    """The auditable, no-LLM core: parsing, CMMS checks, priority, query build."""
+
+    REPORT = ("SENSOR: tcp_top_pwr\nCHAMBER: CHA\nALERT TYPE: ANOMALY\n\n"
+              "NCR SUMMARY:\nTCP +50W fault on CHA.\n\n"
+              "TOOL WEAR INDICATORS:\nRF generator hours 1241.\n\n"
+              "RECURRENCE:\nFour TCP faults on CHA.")
+
+    def _pm_df(self):
+        return pd.DataFrame([
+            {"chamber_id": "CHA", "pm_type": "WET_CLEAN", "wafers_until_pm": -8, "pm_status": "OVERDUE"},
+            {"chamber_id": "CHA", "pm_type": "FULL_PM",   "wafers_until_pm": 200, "pm_status": "OK"},
+        ])
+
+    def _parts_df(self):
+        return pd.DataFrame([
+            {"component_category": "TCP_GENERATOR", "part_number": "P0", "description": "d",
+             "quantity_on_hand": 0,  "reorder_level": 2, "lead_time_days": 5, "storage_location": "A"},
+            {"component_category": "TCP_GENERATOR", "part_number": "PL", "description": "d",
+             "quantity_on_hand": 2,  "reorder_level": 2, "lead_time_days": 5, "storage_location": "A"},
+            {"component_category": "TCP_GENERATOR", "part_number": "PI", "description": "d",
+             "quantity_on_hand": 10, "reorder_level": 2, "lead_time_days": 5, "storage_location": "A"},
+        ])
+
+    def _calib_df(self):
+        return pd.DataFrame([
+            {"chamber_id": "CHA", "component_category": "TCP_GENERATOR", "component": "TCP power meter",
+             "calibration_status": "OVERDUE", "next_calibration_due": "2024-01-01",
+             "last_calibration_date": "2023-01-01", "calibration_notes": "n"},
+        ])
+
+    # ── parsing & mapping ─────────────────────────────────────────────────────
+    def test_parse_quality_report_headers(self):
+        p = ma.parse_quality_report(self.REPORT)
+        self.assertEqual(p["sensor"], "tcp_top_pwr")
+        self.assertEqual(p["chamber_id"], "CHA")
+        self.assertEqual(p["alert_type"], "ANOMALY")
+        self.assertEqual(p["component"], "TCP_GENERATOR")
+
+    def test_parse_missing_headers_are_unknown(self):
+        p = ma.parse_quality_report("no headers here")
+        self.assertEqual(p["sensor"], "UNKNOWN")
+        self.assertEqual(p["chamber_id"], "UNKNOWN")
+        self.assertEqual(p["component"], "UNKNOWN")
+
+    def test_sensor_to_component_mapping(self):
+        for sensor, comp in [("tcp_top_pwr", "TCP_GENERATOR"), ("rf_btm_pwr", "RF_GENERATOR"),
+                             ("bcl3_flow", "BCL3_MFC"), ("cl2_flow", "CL2_MFC"),
+                             ("pressure", "PRESSURE_SYSTEM"), ("he_press", "ESC_HE_CIRCUIT")]:
+            self.assertEqual(ma.SENSOR_TO_COMPONENT[sensor], comp)
+
+    # ── CMMS checks ───────────────────────────────────────────────────────────
+    def test_check_pm_status_flags_overdue_wet_clean(self):
+        r = ma.check_pm_status("CHA", "TCP_GENERATOR", self._pm_df())
+        self.assertEqual(r["wet_clean_status"], "OVERDUE")
+        self.assertEqual(r["wet_clean_overdue_by"], 8)
+        self.assertEqual(r["full_pm_wafers_until"], 200)
+        self.assertTrue(any("WET_CLEAN" in x for x in r["overdue_items"]))
+        self.assertTrue(r["wet_clean_relevant"])           # TCP is wet-clean sensitive
+
+    def test_check_pm_status_wet_clean_not_relevant_for_gas(self):
+        r = ma.check_pm_status("CHA", "BCL3_MFC", self._pm_df())
+        self.assertFalse(r["wet_clean_relevant"])
+
+    def test_check_parts_availability_statuses(self):
+        parts = {p["part_number"]: p["status"]
+                 for p in ma.check_parts_availability("TCP_GENERATOR", self._parts_df())}
+        self.assertEqual(parts["P0"], "OUT_OF_STOCK")
+        self.assertEqual(parts["PL"], "LOW_STOCK")
+        self.assertEqual(parts["PI"], "IN_STOCK")
+
+    def test_check_calibration_found_and_not_found(self):
+        found = ma.check_calibration_status("CHA", "TCP_GENERATOR", self._calib_df())
+        self.assertEqual(found["status"], "OVERDUE")
+        self.assertEqual(found["component"], "TCP power meter")
+        missing = ma.check_calibration_status("CHB", "TCP_GENERATOR", self._calib_df())
+        self.assertEqual(missing["status"], "NOT_FOUND")
+
+    # ── priority (the auditable decision) ─────────────────────────────────────
+    def test_priority_critical(self):
+        pm    = {"overdue_items": ["WET_CLEAN overdue by 8 wafers"]}
+        parts = [{"status": "OUT_OF_STOCK"}]
+        calib = {"status": "OK"}
+        self.assertEqual(ma.determine_priority(pm, parts, calib, "ANOMALY"), "CRITICAL")
+
+    def test_priority_high_from_calibration(self):
+        self.assertEqual(
+            ma.determine_priority({"overdue_items": []}, [{"status": "IN_STOCK"}],
+                                  {"status": "OVERDUE"}, "ANOMALY"), "HIGH")
+
+    def test_priority_high_from_low_stock(self):
+        self.assertEqual(
+            ma.determine_priority({"overdue_items": []}, [{"status": "LOW_STOCK"}],
+                                  {"status": "OK"}, "TREND"), "HIGH")
+
+    def test_priority_medium_clean_anomaly(self):
+        self.assertEqual(
+            ma.determine_priority({"overdue_items": []}, [{"status": "IN_STOCK"}],
+                                  {"status": "OK"}, "ANOMALY"), "MEDIUM")
+
+    def test_priority_low_clean_trend(self):
+        self.assertEqual(
+            ma.determine_priority({"overdue_items": []}, [{"status": "IN_STOCK"}],
+                                  {"status": "OK"}, "TREND"), "LOW")
+
+    # ── query building & signal extraction ────────────────────────────────────
+    def test_build_wo_query_uses_full_upstream_picture(self):
+        parsed = {"sensor": "tcp_top_pwr", "chamber_id": "CHA",
+                  "alert_type": "ANOMALY", "component": "TCP_GENERATOR"}
+        alert  = {"deviation": "+50W above set-point", "value": 410.0, "severity": "HIGH"}
+        q = ma.build_wo_query(parsed, alert, self.REPORT)
+        self.assertIn("tcp_top_pwr", q)
+        self.assertIn("TCP_GENERATOR", q)
+        self.assertIn("+50W", q)                 # Agent 1 deviation
+        self.assertIn("Four TCP faults", q)      # Agent 2 recurrence signal
+
+    def test_extract_quality_signals(self):
+        sig = ma._extract_quality_signals(self.REPORT)
+        self.assertIn("TCP +50W fault", sig)
+        self.assertIn("1241", sig)
+        self.assertIn("Four TCP faults", sig)
+
+
+class TestMaintenanceEndToEnd(unittest.TestCase):
+    """run_maintenance_agent with a mocked WO collection + mocked LLM."""
+
+    def _run(self):
+        report = TestMaintenanceDeterministic.REPORT
+        d = TestMaintenanceDeterministic()
+        pm_df, parts_df, calib_df = d._pm_df(), d._parts_df(), d._calib_df()
+        alert = {"alert_type": "ANOMALY", "sensor": "tcp_top_pwr", "wafer_id": 2915,
+                 "lot_id": "LOT_29B", "chamber_id": "CHA", "value": 410.0,
+                 "threshold_min": 334, "threshold_max": 360,
+                 "deviation": "+50W above set-point", "severity": "HIGH"}
+        coll = MagicMock()
+        coll.query.return_value = {
+            "documents": [["WO history doc"] * 5],
+            "distances": [[0.10, 0.20, 0.30, 0.40, 0.50]],
+        }
+        client = MagicMock()
+        client.chat.completions.create.return_value.choices[0].message.content = (
+            '{"past_wo_patterns": "PATTERN", "recommended_actions": ["1. act"], '
+            '"draft_wo_header": "WO HEADER", "llm_narrative": "NARR"}')
+        return ma.run_maintenance_agent(alert, report, coll, pm_df, parts_df, calib_df, client)
+
+    def test_returns_structured_dict_with_deterministic_fields(self):
+        rec = self._run()
+        self.assertEqual(rec["sensor"], "tcp_top_pwr")
+        self.assertEqual(rec["chamber_id"], "CHA")
+        self.assertEqual(rec["component"], "TCP_GENERATOR")
+
+    def test_priority_is_critical_given_overdue_pm_and_out_of_stock(self):
+        # PM overdue (WET_CLEAN) + a part OUT_OF_STOCK -> CRITICAL (deterministic).
+        self.assertEqual(self._run()["priority"], "CRITICAL")
+
+    def test_llm_fields_come_from_model_output(self):
+        rec = self._run()
+        self.assertEqual(rec["past_wo_patterns"], "PATTERN")
+        self.assertEqual(rec["draft_wo_header"], "WO HEADER")
+        self.assertEqual(rec["llm_narrative"], "NARR")
+
+
+# =============================================================================
+# SOP / Knowledge Agent
+# =============================================================================
+
+class TestSOPDeterministic(unittest.TestCase):
+
+    REPORT = ("SENSOR: tcp_top_pwr\nCHAMBER: CHA\nALERT TYPE: ANOMALY\n\n"
+              "NCR SUMMARY:\nTCP over-etch.\n\n"
+              "TOOL WEAR INDICATORS:\nRF hrs 1241.\n\n"
+              "RECURRENCE:\nFour times on CHA.")
+
+    def _alert(self):
+        return {"alert_type": "ANOMALY", "sensor": "tcp_top_pwr",
+                "deviation": "+50W above set-point", "chamber_id": "CHA",
+                "severity": "HIGH"}
+
+    def _rec(self):
+        return {"priority": "CRITICAL", "component": "TCP_GENERATOR",
+                "past_wo_patterns": "prior capacitor bank replacement"}
+
+    def test_build_query_contains_alert_and_maintenance_fields(self):
+        q = so.build_query(self._alert(), self.REPORT, self._rec())
+        self.assertIn("tcp_top_pwr", q)
+        self.assertIn("CHA", q)
+        self.assertIn("CRITICAL", q)                       # priority from maintenance
+        self.assertIn("TCP_GENERATOR", q)                  # component
+        self.assertIn("+50W", q)                           # deviation
+
+    def test_build_query_folds_in_upstream_signals(self):
+        q = so.build_query(self._alert(), self.REPORT, self._rec())
+        self.assertIn("Four times on CHA", q)              # quality recurrence
+        self.assertIn("prior capacitor bank replacement", q)  # maintenance WO pattern
+
+    def test_source_labels_mapping(self):
+        self.assertEqual(so.SOURCE_LABELS["sop"], "SOP Procedure")
+        self.assertEqual(so.SOURCE_LABELS["guides"], "Troubleshooting Guide")
+        self.assertEqual(so.SOURCE_LABELS["incidents"], "Incident Record")
+        self.assertEqual(so.SOURCE_LABELS["manuals"], "Equipment Manual")
+
+    def test_extract_quality_signals(self):
+        sig = so._extract_quality_signals(self.REPORT)
+        self.assertIn("TCP over-etch", sig)
+        self.assertIn("Four times on CHA", sig)
+
+    def test_retrieve_cases_shape(self):
+        coll = MagicMock()
+        coll.query.return_value = {
+            "documents": [["DOC BODY"] * 5],
+            "distances": [[0.10, 0.20, 0.30, 0.40, 0.50]],
+            "metadatas": [[{"source": "manuals", "id": "MAN-1"}] * 5],
+        }
+        cases = so.retrieve_cases(coll, "q", top_k=5)
+        self.assertEqual(len(cases), 5)
+        self.assertEqual([c["rank"] for c in cases], [1, 2, 3, 4, 5])
+        self.assertEqual(cases[0]["source"], "manuals")
+        self.assertEqual(cases[0]["id"], "MAN-1")
+        for c in cases:
+            for k in ("rank", "similarity", "content", "source", "id"):
+                self.assertIn(k, c)
+
+
+class TestSOPEndToEnd(unittest.TestCase):
+
+    def _retrieved(self):
+        return [{"rank": 1, "similarity": 0.82, "content": "MANUAL CONTENT",
+                 "source": "manuals", "id": "MAN-1"},
+                {"rank": 2, "similarity": 0.70, "content": "SOP CONTENT",
+                 "source": "sop", "id": "SOP-1"}]
+
+    def _rec(self):
+        return {"priority": "CRITICAL", "component": "TCP_GENERATOR",
+                "pm_status": {"overdue_items": ["WET_CLEAN overdue"]},
+                "required_parts": [{"part_number": "P0", "status": "OUT_OF_STOCK"}],
+                "calibration_status": {"status": "OVERDUE"},
+                "recommended_actions": ["Replace capacitor bank"],
+                "llm_narrative": "TCP generator degrading."}
+
+    def test_synthesise_report_includes_all_upstream_context(self):
+        alert  = {"alert_type": "ANOMALY", "sensor": "tcp_top_pwr", "chamber_id": "CHA",
+                  "deviation": "+50W", "severity": "HIGH"}
+        report = "SENSOR: tcp_top_pwr\nNCR SUMMARY:\nUNIQUE_QUALITY_MARKER."
+        client = MagicMock()
+        client.chat.completions.create.return_value.choices[0].message.content = "REPORT_OUT"
+        out = so.synthesise_report(alert, report, self._rec(), self._retrieved(), client)
+        self.assertEqual(out, "REPORT_OUT")
+
+        msg = client.chat.completions.create.call_args[1]["messages"][1]["content"]
+        self.assertIn("UNIQUE_QUALITY_MARKER", msg)  # Agent 2 quality report present
+        self.assertIn("CRITICAL", msg)               # Agent 3 priority present
+        self.assertIn("MANUAL CONTENT", msg)          # retrieved KB present
+        self.assertIn("Equipment Manual", msg)        # human-readable source label
+
+    def test_run_sop_agent_returns_string(self):
+        alert  = {"alert_type": "ANOMALY", "sensor": "tcp_top_pwr", "chamber_id": "CHA",
+                  "deviation": "+50W", "severity": "HIGH"}
+        report = "SENSOR: tcp_top_pwr\nNCR SUMMARY:\nx."
+        coll = MagicMock()
+        coll.query.return_value = {
+            "documents": [["DOC"] * 5],
+            "distances": [[0.10, 0.20, 0.30, 0.40, 0.50]],
+            "metadatas": [[{"source": "manuals", "id": "MAN-1"}] * 5],
+        }
+        client = MagicMock()
+        client.chat.completions.create.return_value.choices[0].message.content = "SOP REPORT"
+        out = so.run_sop_agent(alert, report, self._rec(), coll, client)
+        self.assertIsInstance(out, str)
+        self.assertEqual(out, "SOP REPORT")
+
+
+# =============================================================================
 # Runner
 # =============================================================================
 
@@ -1054,6 +1781,21 @@ if __name__ == "__main__":
         TestLLMContext,
         TestReportStructure,
         TestNormalizeAlert,
+        TestCountingAndAttribution,
+        TestArithmetic,
+        TestInputRobustness,
+        TestProviderSeam,
+        TestNarrator,
+        TestDeterminism,
+        TestCostModel,
+        TestSustainabilityRealData,
+        TestSustainabilityPerformance,
+        TestWafersLeftInLot,
+        TestPipelinePropagation,
+        TestMaintenanceDeterministic,
+        TestMaintenanceEndToEnd,
+        TestSOPDeterministic,
+        TestSOPEndToEnd,
     ]:
         suite.addTests(loader.loadTestsFromTestCase(cls))
 
