@@ -43,16 +43,11 @@
     flex-shrink: 0; border-bottom: 1px solid var(--border); background: rgba(8,12,22,0.6);
   }
   .logo-block { display: flex; align-items: center; gap: 11px; }
-  .logo-badge {
-    width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center;
-    justify-content: center; font-family: var(--mono); font-weight: 700; font-size: 13px;
-    color: #fff; background: linear-gradient(150deg, #3b82f6, #22d3ee);
-    box-shadow: 0 0 16px rgba(34,211,238,0.35);
-  }
+  .logo-mark { display: flex; align-items: center; flex-shrink: 0; color: var(--text); }
   .logo-name { font-weight: 700; font-size: 16px; letter-spacing: 1px; }
   .logo-sub { font-family: var(--mono); font-size: 9.5px; color: var(--muted); letter-spacing: 1.5px; margin-top: 1px; }
 
-  .pipeline { display: flex; align-items: center; gap: 9px; margin-left: 10px; }
+  .pipeline { display: flex; align-items: center; gap: 9px; margin-left: 200px;}
   .pipe-pill {
     font-family: var(--mono); font-size: 9.5px; font-weight: 600; letter-spacing: 1.6px;
     color: var(--text2); border: 1px solid var(--border2); border-radius: 8px; padding: 7px 13px;
@@ -60,6 +55,24 @@
   }
   .pipe-pill.dim { color: var(--muted); }
   .pipe-arrow { color: var(--muted2); font-size: 13px; }
+
+  /* Full agent pipeline (transparency view) */
+  .pipe-label { font-family: var(--mono); font-size: 9px; letter-spacing: 1.6px; color: var(--muted); margin-right: 2px; }
+  .pipe-stage {
+    font-family: var(--mono); font-size: 9px; font-weight: 600; letter-spacing: 1.2px;
+    color: var(--muted); border: 1px solid var(--border2); border-radius: 8px; padding: 6px 10px;
+    background: rgba(255,255,255,0.015); white-space: nowrap;
+    transition: color 0.25s, border-color 0.25s, box-shadow 0.25s, background 0.25s;
+  }
+  .pipe-stage.active {
+    color: #04211c; background: var(--teal); border-color: var(--teal);
+    box-shadow: 0 0 14px rgba(94,234,212,0.65); animation: pipeZap 1.1s ease-in-out;
+  }
+  @keyframes pipeZap {
+    0%   { box-shadow: 0 0 2px rgba(94,234,212,0.2); }
+    35%  { box-shadow: 0 0 22px rgba(94,234,212,0.95); }
+    100% { box-shadow: 0 0 14px rgba(94,234,212,0.6); }
+  }
 
   .hspacer { flex: 1; }
   .counts { display: flex; align-items: center; gap: 18px; }
@@ -70,11 +83,12 @@
   .dot.green { background: var(--green); box-shadow: 0 0 7px var(--green); }
   .dot.grey { background: #3a465e; }
   .vbar { width: 1px; height: 22px; background: var(--border2); }
-  .clock { font-family: var(--mono); font-size: 14px; letter-spacing: 1.5px; color: var(--text); min-width: 78px; text-align: center; }
+  /* .clock { font-family: var(--mono); font-size: 14px; letter-spacing: 1.5px; color: var(--text); min-width: 78px; text-align: center; } */
   .btn {
     font-family: var(--mono); font-size: 10px; font-weight: 600; letter-spacing: 1.6px;
     color: var(--text2); background: rgba(255,255,255,0.02); border: 1px solid var(--border2);
-    border-radius: 9px; padding: 9px 15px; cursor: pointer; transition: all 0.15s;
+    border-radius: 9px; height: 34px; padding: 0 15px; cursor: pointer; transition: all 0.15s;
+    display: inline-flex; align-items: center; justify-content: center;
   }
   .btn:hover { border-color: var(--teal); color: var(--text); }
   .btn.on { color: var(--teal); border-color: rgba(94,234,212,0.5); background: rgba(94,234,212,0.06); }
@@ -164,12 +178,13 @@
   .err-count { display: flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11px; color: var(--text2); }
   .errors-list { flex: 1; min-height: 0; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 11px; }
   .err-card {
-    border: 1px solid var(--border); border-left: 3px solid var(--yellow); border-radius: 11px;
+    border: 1px solid var(--border); border-left: 3px solid var(--red); border-radius: 11px;
     background: var(--card); padding: 13px 15px; cursor: pointer; transition: all 0.15s;
   }
   .err-card:hover { background: var(--card2); border-color: var(--border2); }
-  .err-card.anomaly { border-left-color: var(--yellow); }
-  .err-card.quality { border-left-color: var(--yellow); }
+  .err-card.anomaly { border-left-color: var(--red); }
+  .err-card.trend   { border-left-color: var(--yellow); }
+  .err-card.quality { border-left-color: var(--green); }
   .err-top { display: flex; align-items: center; gap: 8px; }
   .err-ch { font-family: var(--mono); font-weight: 700; font-size: 12px; letter-spacing: 1px; }
   .err-pc { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: 1px; }
@@ -182,12 +197,12 @@
   .err-id { font-family: var(--mono); font-size: 10px; letter-spacing: 1px; color: var(--muted); }
 
   /* ───────────── TREND WATCH ───────────── */
-  .trend { flex-direction: row; align-items: stretch; }
-  .trend-label { display: flex; flex-direction: column; justify-content: center; gap: 9px; padding: 0 20px; border-right: 1px solid var(--border); min-width: 170px; flex-shrink: 0; }
+  .panel.trend { flex-direction: row; align-items: stretch; min-height: 108px; }
+  .trend-label { display: flex; flex-direction: column; justify-content: center; gap: 10px; padding: 18px 22px; border-right: 1px solid var(--border); min-width: 170px; flex-shrink: 0; }
   .trend-title { font-family: var(--mono); font-weight: 700; font-size: 11px; letter-spacing: 1.6px; color: var(--text2); }
   .trend-agent { font-family: var(--mono); font-size: 8.5px; letter-spacing: 1.4px; color: var(--teal); border: 1px solid rgba(94,234,212,0.3); border-radius: 6px; padding: 4px 8px; align-self: flex-start; }
   .trend-items { display: flex; flex: 1; min-width: 0; }
-  .trend-item { flex: 1; min-width: 0; padding: 16px 22px; border-right: 1px solid var(--border); display: flex; flex-direction: column; justify-content: center; gap: 9px; }
+  .trend-item { flex: 1; min-width: 0; padding: 20px 24px; border-right: 1px solid var(--border); display: flex; flex-direction: column; justify-content: center; gap: 13px; }
   .trend-item:last-child { border-right: none; }
   .trend-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .trend-name { font-family: var(--mono); font-size: 12px; color: var(--text2); letter-spacing: 0.5px; }
@@ -226,40 +241,77 @@
   .modal {
     background: #0b1322;
     border: 1px solid var(--border2); border-radius: 18px; box-shadow: 0 30px 90px rgba(0,0,0,0.7);
-    max-height: 100%; overflow: hidden; display: flex; flex-direction: column;
+    max-height: calc(100vh - 88px); overflow: hidden; display: flex; flex-direction: column;
   }
-  .modal.detail { width: 640px; }
+  .modal.detail { width: 540px; }
   .modal.plant  { width: min(1180px, 100%); }
-  .modal-head { display: flex; align-items: center; gap: 11px; padding: 18px 22px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .modal-head { display: flex; align-items: center; gap: 11px; padding: 16px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
   .modal-title { font-family: var(--mono); font-weight: 700; font-size: 13px; letter-spacing: 2px; }
   .modal-sub { font-family: var(--mono); font-size: 11px; letter-spacing: 1.4px; color: var(--muted); }
-  .modal-x {
-    margin-left: auto; width: 32px; height: 32px; border-radius: 9px; border: 1px solid var(--border2);
+  .modal-back, .modal-x {
+    width: 32px; height: 32px; border-radius: 9px; border: 1px solid var(--border2);
     background: rgba(255,255,255,0.02); color: var(--text2); cursor: pointer; font-size: 16px;
     display: flex; align-items: center; justify-content: center; transition: all 0.15s;
   }
+  .modal-x { margin-left: auto; }
   .modal-x:hover { border-color: var(--red); color: var(--red); }
-  .modal-body { padding: 22px; overflow-y: auto; }
-  /* Detail modal: keep it compact — the body itself does not scroll, only the
-     Agent Findings list does. */
-  .modal.detail .modal-body { overflow: hidden; }
-  .findings-scroll { max-height: 260px; overflow-y: auto; }
+  .modal-back:hover { border-color: var(--teal); color: var(--teal); }
+  .modal-body { padding: 18px 20px; overflow-y: auto; }
+  /* Detail modal scrolls as a single region so it always fits within the viewport. */
+  .modal.detail .modal-body { overflow-y: auto; }
+  .findings-scroll { max-height: none; overflow: visible; }
 
   .badge { font-family: var(--mono); font-size: 11px; font-weight: 700; letter-spacing: 1.6px; padding: 4px 11px; border-radius: 7px; }
   .badge.fault { color: var(--red); border: 1px solid rgba(248,81,73,0.45); background: rgba(248,81,73,0.08); }
   .badge.nominal { color: var(--green); border: 1px solid rgba(52,211,153,0.45); background: rgba(52,211,153,0.08); }
   .badge.watch { color: var(--yellow); border: 1px solid rgba(251,191,36,0.45); background: rgba(251,191,36,0.08); }
 
-  .md-title { display: flex; align-items: center; gap: 13px; }
-  .md-name { font-family: var(--mono); font-size: 24px; font-weight: 700; letter-spacing: 1px; }
-  .md-machine { font-size: 13.5px; color: var(--muted); margin: 6px 0 20px; }
-  .md-meta { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px 18px; margin-bottom: 20px; }
-  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; margin-bottom: 24px; }
-  .stat-box { border: 1px solid var(--border); border-radius: 12px; background: var(--card); padding: 15px 17px; }
-  .stat-box label { display: block; font-family: var(--mono); font-size: 9px; letter-spacing: 1.4px; color: var(--muted); margin-bottom: 8px; }
-  .stat-box .val { font-family: var(--mono); font-size: 24px; font-weight: 700; color: var(--text); }
+  .md-title { display: flex; align-items: center; gap: 12px; }
+  .md-name { font-family: var(--mono); font-size: 20px; font-weight: 700; letter-spacing: 1px; }
+  .md-machine { font-size: 13px; color: var(--muted); margin: 5px 0 14px; }
+  .md-meta { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px 16px; margin-bottom: 14px; }
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  .stat-box { border: 1px solid var(--border); border-radius: 12px; background: var(--card); padding: 12px 15px; }
+  .stat-box label { display: block; font-family: var(--mono); font-size: 9px; letter-spacing: 1.4px; color: var(--muted); margin-bottom: 6px; }
+  .stat-box .val { font-family: var(--mono); font-size: 20px; font-weight: 700; color: var(--text); }
   .stat-box .unit { font-size: 13px; color: var(--muted); font-weight: 400; }
   .findings-label { font-family: var(--mono); font-size: 11px; letter-spacing: 1.6px; color: var(--muted); margin-bottom: 14px; }
+
+  /* Cost of Continued Run (Sustainability Agent) */
+  .cost-panel { border: 1px solid rgba(248,113,113,0.4); border-radius: 13px; background: rgba(248,113,113,0.06); padding: 15px 18px; margin-bottom: 14px; }
+  .cost-panel.nominal { border-color: var(--border2); background: rgba(52,211,153,0.05); }
+  .cost-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+  .cost-title { font-family: var(--mono); font-size: 11px; font-weight: 700; letter-spacing: 1.6px; color: var(--red); display: flex; align-items: center; gap: 9px; }
+  .cost-panel.nominal .cost-title { color: var(--green); }
+  .cost-ico { display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px; border-radius: 50%; border: 1px solid currentColor; font-size: 9px; font-weight: 700; }
+  .cost-badge { font-family: var(--mono); font-size: 9px; font-weight: 700; letter-spacing: 1.4px; color: var(--red); border: 1px solid rgba(248,113,113,0.5); border-radius: 7px; padding: 5px 10px; white-space: nowrap; }
+  .cost-panel.nominal .cost-badge { color: var(--green); border-color: rgba(52,211,153,0.5); }
+  .cost-figure { font-family: var(--mono); font-size: 28px; font-weight: 700; color: var(--red); letter-spacing: 0.5px; margin-bottom: 7px; }
+  .cost-panel.nominal .cost-figure { color: var(--green); }
+  .cost-per { font-size: 20px; opacity: 0.8; }
+  .cost-desc { font-size: 13px; color: var(--text2); line-height: 1.5; }
+
+  /* How to fix button */
+  .fix-btn {
+    width: 100%; font-family: var(--mono); font-size: 12px; font-weight: 700; letter-spacing: 1.6px;
+    color: #2a0b0b; background: linear-gradient(90deg, #fb7185, #f87171); border: none; border-radius: 12px;
+    padding: 13px; cursor: pointer; margin-bottom: 16px; display: flex; align-items: center;
+    justify-content: center; gap: 10px; transition: filter 0.15s;
+  }
+  .fix-btn:hover { filter: brightness(1.08); }
+
+  /* Resolution Playbook (Supervisor Agent) */
+  .pb-cause-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+  .pb-label { font-family: var(--mono); font-size: 10px; letter-spacing: 1.6px; color: var(--muted); margin-bottom: 7px; }
+  .pb-cause { font-size: 17px; font-weight: 700; color: var(--text); }
+  .pb-eta { font-family: var(--mono); font-size: 11px; letter-spacing: 1px; color: var(--green); border: 1px solid rgba(52,211,153,0.4); border-radius: 8px; padding: 8px 13px; white-space: nowrap; flex-shrink: 0; }
+  .pb-steps { display: flex; flex-direction: column; gap: 20px; margin-bottom: 22px; }
+  .pb-step { display: flex; gap: 16px; align-items: flex-start; }
+  .pb-num { flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--border2); display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 12px; color: var(--text2); }
+  .pb-step-title { font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+  .pb-step-desc { font-size: 13.5px; color: var(--text2); line-height: 1.5; }
+  .pb-note { display: flex; gap: 11px; font-size: 12.5px; color: var(--text2); line-height: 1.5; border: 1px solid var(--border2); border-radius: 12px; padding: 16px; background: rgba(79,143,247,0.05); }
+  .pb-note-ico { color: var(--blue); flex-shrink: 0; }
   .finding { display: grid; grid-template-columns: auto 1fr auto; gap: 10px 12px; align-items: start; padding: 13px 0; border-top: 1px solid var(--border); }
   .finding:first-of-type { border-top: none; }
   .finding .fdot { width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; }
@@ -304,25 +356,30 @@
 <!-- HEADER -->
 <div class="header">
   <div class="logo-block">
-    <div class="logo-badge mono">F2</div>
-    <div>
-      <div class="logo-name">FABWATCH</div>
-      <div class="logo-sub">FAB 2 · PHOENIX</div>
-    </div>
+    <span class="logo-mark">
+      <svg width="30" height="30" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+        <circle cx="14.5" cy="20" r="9" stroke="currentColor" stroke-width="6"/>
+        <rect x="24.5" y="7" width="6" height="26" rx="3" fill="currentColor" transform="rotate(20 27.5 20)"/>
+      </svg>
+    </span>
+    <span class="logo-name">ARGUS</span>
   </div>
-  <div class="pipeline">
-    <span class="pipe-pill">ANOMALY + TREND</span>
+  <div class="pipeline" id="pipeline">
+    <span class="pipe-label">AGENTS</span>
+    <span class="pipe-stage" data-stage="production">PRODUCTION</span>
     <span class="pipe-arrow">→</span>
-    <span class="pipe-pill dim">QUALITY</span>
+    <span class="pipe-stage" data-stage="quality">QUALITY</span>
+    <span class="pipe-arrow">→</span>
+    <span class="pipe-stage" data-stage="maintenance">MAINTENANCE</span>
+    <span class="pipe-arrow">→</span>
+    <span class="pipe-stage" data-stage="sop">SOP</span>
+    <span class="pipe-arrow">→</span>
+    <span class="pipe-stage" data-stage="sustainability">SUSTAINABILITY</span>
+    <span class="pipe-arrow">→</span>
+    <span class="pipe-stage" data-stage="supervisor">SUPERVISOR</span>
   </div>
   <div class="hspacer"></div>
-  <div class="counts">
-    <div class="count"><span class="dot red"></span> <b id="cnt-fault">1</b>&nbsp;FAULT</div>
-    <div class="count"><span class="dot yellow"></span> <b id="cnt-watch">0</b>&nbsp;WATCH</div>
-    <div class="count"><span class="dot green"></span> <b id="cnt-ok">1</b>&nbsp;OK</div>
-  </div>
-  <div class="vbar"></div>
-  <div class="clock" id="clock">--:--:--</div>
+  <!-- <div class="clock" id="clock">--:--:--</div> -->
   <button class="btn" id="pauseBtn">PAUSE</button>
   <button class="btn on" id="soundBtn">SOUND ON</button>
 </div>
@@ -371,7 +428,7 @@
       <span class="live-dot"></span>
       <div class="err-counts">
         <span class="err-count"><span class="dot red"></span> <b id="err-red">0</b></span>
-        <span class="err-count"><span class="dot green"></span> <b id="err-green">0</b></span>
+        <span class="err-count"><span class="dot yellow"></span> <b id="err-yellow">0</b></span>
       </div>
     </div>
     <div class="errors-list" id="errorsList"></div>
@@ -544,12 +601,6 @@ function renderCritical() {
     <span class="crit-time">${c.time}</span>`;
 }
 
-function renderCounts() {
-  document.getElementById('cnt-fault').textContent = state.counts.fault;
-  document.getElementById('cnt-watch').textContent = state.counts.watch;
-  document.getElementById('cnt-ok').textContent = state.counts.ok;
-}
-
 function renderChambers() {
   const order = Object.keys(state.chambers);
   document.getElementById('floor').innerHTML = order.map((key, i) => {
@@ -592,7 +643,7 @@ function renderErrors() {
       <div class="err-id">${e.id}</div>
     </div>`).join('');
   document.getElementById('err-red').textContent = errors.filter(e => e.type === 'anomaly').length;
-  document.getElementById('err-green').textContent = errors.filter(e => e.type === 'quality').length;
+  document.getElementById('err-yellow').textContent = errors.filter(e => e.type === 'trend').length;
   document.querySelectorAll('.err-card').forEach(el => {
     el.addEventListener('click', () => { if (state.chambers[el.dataset.ch]) openDetail(el.dataset.ch); });
   });
@@ -681,6 +732,18 @@ function openDetail(key) {
         <div class="finding-id">${f.id}</div>
       </div>`;
   }).join('');
+  // Cost of Continued Run — output of the Sustainability Agent.
+  // PLACEHOLDER for now (ch.sustainability); wired to the real agent later.
+  const cost = ch.sustainability || placeholderCost(ch);
+  const costHtml = `
+    <div class="cost-panel ${cost.level === 'nominal' ? 'nominal' : ''}">
+      <div class="cost-head">
+        <span class="cost-title"><span class="cost-ico">$</span> COST OF CONTINUED RUN</span>
+        <span class="cost-badge">${cost.badge}</span>
+      </div>
+      <div class="cost-figure">${cost.figure} <span class="cost-per">${cost.per}</span></div>
+      <div class="cost-desc">${cost.desc}</div>
+    </div>`;
   openModal(`
     <div class="modal-head">
       <span class="dot" style="background:${col};box-shadow:0 0 7px ${col};"></span>
@@ -702,10 +765,96 @@ function openDetail(key) {
         <div class="kv"><label>WORK ORDER</label><span style="color:${ch.workOrder && ch.workOrder !== 'NONE' ? 'var(--red)' : 'var(--text)'};">${ch.workOrder}</span></div>
       </div>
       <div class="stat-grid">${statBoxes}</div>
+      ${costHtml}
+      <button class="fix-btn" data-fix>🔧 HOW TO FIX THIS ANOMALY</button>
       <div class="findings-label">AGENT FINDINGS</div>
       <div class="findings-scroll">${noFindings ? '<div style="font-family:var(--mono);font-size:11px;color:var(--muted);">No active findings — chamber nominal.</div>' : findings}</div>
     </div>`, 'detail');
+  const fixBtn = mount.querySelector('[data-fix]');
+  if (fixBtn) fixBtn.addEventListener('click', () => openPlaybook(key));
 }
+
+// PLACEHOLDER — replaced later by the Sustainability Agent output (ch.sustainability).
+function placeholderCost(ch) {
+  if (ch.status === 'fault')
+    return { level: 'critical', figure: '$30,800', per: '/ hr', badge: 'CRITICAL EXPOSURE',
+             desc: `Running ${ch.name} in fault risks scrapping the active lot plus unplanned downtime and rework. Yield loss compounds across queued lots for every hour of delay.` };
+  if (ch.status === 'watch')
+    return { level: 'watch', figure: '$8,400', per: '/ hr', badge: 'ELEVATED EXPOSURE',
+             desc: `${ch.name} is trending toward a control limit. Continued operation risks rework on the current lot if the drift is not corrected.` };
+  return { level: 'nominal', figure: '$0', per: '/ hr', badge: 'NO EXPOSURE',
+           desc: `${ch.name} is running within limits — no cost exposure from continued operation.` };
+}
+
+// PLACEHOLDER — replaced later by the Supervisor Agent output (ch.playbook).
+function placeholderPlaybook(ch) {
+  return {
+    cause: 'Process parameter drift',
+    eta: '20–35 min',
+    steps: [
+      { title: 'Place tool in safe idle', desc: `Pause wafer handoff on ${ch.chamber || ch.name} before intervention.` },
+      { title: 'Review the trend', desc: 'Open the parameter trend and identify which signal crossed its control limit.' },
+      { title: 'Correct the deviation', desc: 'Recalibrate the affected subsystem against the recipe baseline.' },
+      { title: 'Verify & release', desc: 'Confirm the parameter holds within limits for 3 cycles, then release the lot.' },
+    ],
+    note: 'Log the corrective action in the MES once complete. If the anomaly recurs within the same shift, escalate to the maintenance lead and open a work order.',
+  };
+}
+
+function openPlaybook(key) {
+  const ch = state.chambers[key];
+  if (!ch) return;
+  const pb = ch.playbook || placeholderPlaybook(ch);
+  const steps = pb.steps.map((s, i) => `
+    <div class="pb-step">
+      <span class="pb-num">${i + 1}</span>
+      <div class="pb-step-body">
+        <div class="pb-step-title">${s.title}</div>
+        <div class="pb-step-desc">${s.desc}</div>
+      </div>
+    </div>`).join('');
+  openModal(`
+    <div class="modal-head">
+      <button class="modal-back" data-back title="Back to machine detail">←</button>
+      <span class="modal-title">🔧 RESOLUTION PLAYBOOK</span>
+      <span class="modal-sub">${ch.name}</span>
+      <button class="modal-x" data-close>✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="pb-cause-row">
+        <div>
+          <div class="pb-label">LIKELY CAUSE</div>
+          <div class="pb-cause">${pb.cause}</div>
+        </div>
+        <span class="pb-eta">Est. ${pb.eta}</span>
+      </div>
+      <div class="pb-steps">${steps}</div>
+      <div class="pb-note"><span class="pb-note-ico">ⓘ</span><span>${pb.note}</span></div>
+    </div>`, 'detail');
+  const back = mount.querySelector('[data-back]');
+  if (back) back.addEventListener('click', () => openDetail(key));   // revert to machine detail
+}
+
+/* ───────────── PIPELINE TRANSPARENCY (header) ─────────────
+   Highlights the active agent as the chain runs. PLACEHOLDER driver: sweeps
+   through the stages to show the pipeline "working". When the agents are wired
+   in, drive this from real per-agent events — call setPipelineStage(name) as
+   each agent starts, and setPipelineIdle() when the chain is done. */
+const PIPELINE_STAGES = ['production', 'quality', 'maintenance', 'sop', 'sustainability', 'supervisor'];
+function setPipelineStage(name) {
+  document.querySelectorAll('.pipe-stage').forEach(el =>
+    el.classList.toggle('active', el.dataset.stage === name));
+}
+function setPipelineIdle() {
+  document.querySelectorAll('.pipe-stage').forEach(el => el.classList.remove('active'));
+}
+let _pipeIdx = 0;
+function tickPipeline() {
+  setPipelineStage(PIPELINE_STAGES[_pipeIdx % PIPELINE_STAGES.length]);
+  _pipeIdx++;
+}
+tickPipeline();
+setInterval(tickPipeline, 1100);
 
 function openPlantView() {
   const cards = (state.tools || []).map(t => {
@@ -750,9 +899,9 @@ function openPlantView() {
 document.getElementById('plantViewBtn').addEventListener('click', openPlantView);
 
 /* ───────────── CLOCK + CONTROLS ───────────── */
-let paused = false;
+/* let paused = false;
 function tick() { if (!paused) document.getElementById('clock').textContent = new Date().toTimeString().slice(0,8); }
-setInterval(tick, 1000); tick();
+setInterval(tick, 1000); tick(); */ 
 
 document.getElementById('pauseBtn').addEventListener('click', function() {
   paused = !paused;
@@ -766,7 +915,6 @@ document.getElementById('soundBtn').addEventListener('click', function() {
 
 /* ───────────── DATA LOADING ───────────── */
 function renderAll() {
-  renderCounts();
   renderCritical();
   renderChambers();
   renderErrors();

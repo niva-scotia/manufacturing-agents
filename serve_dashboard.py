@@ -24,6 +24,7 @@ Usage:
 import atexit
 import functools
 import http.server
+import json
 import os
 import signal
 import socketserver
@@ -31,11 +32,55 @@ import subprocess
 import sys
 from pathlib import Path
 
-WEB_ROOT    = Path(__file__).parent / "front_end"           # the ONLY folder exposed
-SIM_SCRIPT  = Path(__file__).parent / "agents" / "simulate_realtime.py"
+REPO_ROOT   = Path(__file__).parent                         # holds shift_config.json (NOT served)
+WEB_ROOT    = REPO_ROOT / "front_end"                       # the ONLY folder exposed
+SIM_SCRIPT  = REPO_ROOT / "agents" / "simulate_realtime.py"
+SHIFT_CONFIG = REPO_ROOT / "shift_config.json"              # written by the pre-shift onboarding screen
 PORT        = int(os.environ.get("PORT", "8777"))
 HOST        = "127.0.0.1"                                    # localhost only — not the LAN
 AUTO_REPLAY = os.environ.get("AUTO_REPLAY", "1") != "0"     # start the replay on launch
+
+# Contract shared with front_end/onboarding.html and agents/production_agent.py.
+ALLOWED_SENSORS = {"tcp_top_pwr", "bcl3_flow", "cl2_flow", "pressure", "rf_btm_pwr"}
+ALLOWED_ROLES   = {"operator", "supervisor", "quality_engineer", "maintenance_lead"}
+
+
+def sanitize_shift_config(payload):
+    """
+    Validate the onboarding payload BEFORE it touches disk.
+
+    Only the five known sensors and four known roles are accepted, each min must
+    be strictly below its max, and the output path is fixed (shift_config.json at
+    the repo root). Nothing here can write outside that file or inject unknown
+    keys — the endpoint is a narrow, single-purpose config writer.
+    """
+    if not isinstance(payload, dict):
+        raise ValueError("payload must be a JSON object")
+
+    role = payload.get("role")
+    if role not in ALLOWED_ROLES:
+        raise ValueError(f"role must be one of {sorted(ALLOWED_ROLES)}")
+
+    src = payload.get("thresholds")
+    if not isinstance(src, dict):
+        raise ValueError("thresholds must be a JSON object")
+
+    thresholds = {}
+    for sensor, rng in src.items():
+        if sensor not in ALLOWED_SENSORS:
+            continue
+        try:
+            lo, hi = float(rng["min"]), float(rng["max"])
+        except (KeyError, TypeError, ValueError):
+            raise ValueError(f"{sensor}: min and max must be numbers")
+        if not lo < hi:
+            raise ValueError(f"{sensor}: min ({lo}) must be < max ({hi})")
+        thresholds[sensor] = {"min": lo, "max": hi}
+
+    if not thresholds:
+        raise ValueError("no valid sensor thresholds supplied")
+
+    return {"role": role, "thresholds": thresholds, "saved_at": payload.get("saved_at")}
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -43,6 +88,48 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         # Always fetch a fresh data feed (the dashboard polls every 5s).
         self.send_header("Cache-Control", "no-store")
         super().end_headers()
+
+    def do_GET(self):
+        # The pre-shift onboarding screen is the front door: hitting the site
+        # root sends the operator to set thresholds + role first. From there the
+        # "Enter Control Room" button links on to fabwatch_dashboard.html.
+        if self.path.split("?", 1)[0] in ("/", "/index.html"):
+            self.send_response(302)
+            self.send_header("Location", "/onboarding.html")
+            self.end_headers()
+            return
+        super().do_GET()
+
+    def _send_json(self, code, obj):
+        body = json.dumps(obj).encode("utf-8")
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_POST(self):
+        # The one and only write endpoint: persist the pre-shift setup so the
+        # agent chain reads the operator's thresholds instead of hard-coded ones.
+        if self.path.split("?", 1)[0] != "/api/shift-config":
+            self._send_json(404, {"ok": False, "error": "not found"})
+            return
+        try:
+            length  = int(self.headers.get("Content-Length", 0))
+            raw     = self.rfile.read(length) if length else b"{}"
+            payload = json.loads(raw.decode("utf-8"))
+            clean   = sanitize_shift_config(payload)
+        except (ValueError, json.JSONDecodeError) as e:
+            self._send_json(400, {"ok": False, "error": str(e)})
+            return
+        try:
+            SHIFT_CONFIG.write_text(json.dumps(clean, indent=2))
+        except OSError as e:
+            self._send_json(500, {"ok": False, "error": str(e)})
+            return
+        print(f"  [shift-config] saved role={clean['role']} "
+              f"thresholds={len(clean['thresholds'])} → {SHIFT_CONFIG.name}")
+        self._send_json(200, {"ok": True, "file": SHIFT_CONFIG.name})
 
 
 class Server(socketserver.TCPServer):
@@ -90,7 +177,8 @@ def main():
     with httpd:
         print("─" * 60)
         print("FABWATCH dashboard")
-        print(f"  Open:        http://localhost:{port}/fabwatch_dashboard.html")
+        print(f"  Open:        http://localhost:{port}/   (→ pre-shift setup, then the control room)")
+        print(f"  Control room:http://localhost:{port}/fabwatch_dashboard.html")
         print(f"  Serving ONLY: {WEB_ROOT}")
         print("  (.env, data/, agents/, chroma_db/ are NOT exposed)")
         sim = start_replay()

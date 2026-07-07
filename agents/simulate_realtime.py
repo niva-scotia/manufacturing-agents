@@ -41,7 +41,7 @@ from pathlib import Path
 
 import pandas as pd
 
-_HERE = Path(__file__).parents
+_HERE = Path(__file__).parent
 if str(_HERE) not in sys.path:
     sys.path.insert(0, str(_HERE))
 _ROOT = _HERE.parent
