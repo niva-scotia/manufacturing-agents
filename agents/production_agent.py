@@ -188,6 +188,10 @@ for s in sensor_cols:
 # 
 
 # ── User-defined thresholds ───────────────────────────────────────────────────
+# These are the DEFAULTS. The pre-shift onboarding screen
+# (front_end/onboarding.html) lets the operator set these ranges for the shift
+# and writes them to shift_config.json at the repo root; _load_shift_config()
+# below overrides the matching defaults so detection reflects what the user set.
 USER_THRESHOLDS = {
     "tcp_top_pwr" : {"min": 334,  "max": 360},
     "bcl3_flow"   : {"min": 740,  "max": 765},
@@ -195,6 +199,47 @@ USER_THRESHOLDS = {
     "pressure"    : {"min": 942,  "max": 1420},
     "rf_btm_pwr"  : {"min": 124,  "max": 142},
 }
+
+# ── Shift config override (from the onboarding screen) ────────────────────────
+# If shift_config.json exists at the repo root, replace the default ranges above
+# with the operator's chosen values and remember the role they're covering (for
+# the Supervisor Agent's role-specific output). Absent/malformed file → silently
+# keep the hard-coded defaults, so the pipeline still runs standalone.
+SHIFT_CONFIG_PATH = _ROOT / "shift_config.json"
+SHIFT_ROLE = None   # e.g. "operator" | "supervisor" | "quality_engineer" | "maintenance_lead"
+
+def _load_shift_config(thresholds):
+    """Merge shift_config.json onto the default thresholds. Returns the (possibly
+    updated) thresholds dict and sets the module-level SHIFT_ROLE."""
+    global SHIFT_ROLE
+    if not SHIFT_CONFIG_PATH.exists():
+        return thresholds
+    try:
+        cfg = json.loads(SHIFT_CONFIG_PATH.read_text())
+    except (json.JSONDecodeError, OSError) as e:
+        print(f"[shift_config] ignored ({e}); using default thresholds.")
+        return thresholds
+
+    SHIFT_ROLE = cfg.get("role")
+    user_thresholds = cfg.get("thresholds", {})
+    applied = 0
+    for sensor, rng in user_thresholds.items():
+        if sensor not in thresholds:            # only the five known sensors
+            continue
+        try:
+            lo, hi = float(rng["min"]), float(rng["max"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if lo < hi:                             # ignore inverted/degenerate ranges
+            thresholds[sensor] = {"min": lo, "max": hi}
+            applied += 1
+
+    print(f"[shift_config] applied {applied} sensor override(s) from "
+          f"{SHIFT_CONFIG_PATH.name}"
+          + (f"; role = {SHIFT_ROLE}" if SHIFT_ROLE else ""))
+    return thresholds
+
+USER_THRESHOLDS = _load_shift_config(USER_THRESHOLDS)
 
 # ── Trend detection configuration ────────────────────────────────────────────
 TREND_CONFIG = {

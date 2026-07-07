@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FABWATCH — PRE-SHIFT SETUP</title>
+<style>
+  :root {
+    --bg:        #05080f;
+    --panel:     #0a1020;
+    --panel2:    #0b1322;
+    --card:      #0c1426;
+    --card2:     #0e1830;
+    --border:    rgba(120,140,180,0.12);
+    --border2:   rgba(120,140,180,0.22);
+    --text:      #dce4f0;
+    --text2:     #aeb9cc;
+    --muted:     #5d6b85;
+    --muted2:    #44516b;
+    --teal:      #5eead4;
+    --teal-dim:  #2dd4bf;
+    --green:     #34d399;
+    --red:       #f87171;
+    --red-hot:   #fb5b5b;
+    --yellow:    #fbbf24;
+    --blue:      #4f8ff7;
+    --mono: 'SF Mono','JetBrains Mono','Menlo','Consolas',monospace;
+    --sans: -apple-system, 'Inter', 'Segoe UI', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { min-height: 100%; }
+  body {
+    background:
+      radial-gradient(1200px 480px at 70% -10%, rgba(79,143,247,0.10), transparent 60%),
+      radial-gradient(900px 420px at 12% 0%, rgba(94,234,212,0.05), transparent 55%),
+      var(--bg);
+    color: var(--text); font-family: var(--sans); font-size: 13px;
+    min-height: 100vh; -webkit-font-smoothing: antialiased;
+  }
+  .mono  { font-family: var(--mono); }
+  .upper { text-transform: uppercase; letter-spacing: 1.4px; }
+
+  /* ───────────── HEADER ───────────── */
+  .header {
+    display: flex; align-items: center; gap: 16px; padding: 0 26px; height: 60px;
+    border-bottom: 1px solid var(--border); background: rgba(8,12,22,0.55);
+  }
+  .logo-block { display: flex; align-items: center; gap: 12px; }
+  .logo-mark  { display: flex; align-items: center; flex-shrink: 0; color: var(--text); }
+  .logo-txt   { display: flex; flex-direction: column; }
+  .logo-name  { font-weight: 700; font-size: 16px; letter-spacing: 1px; }
+  .logo-sub   { font-family: var(--mono); font-size: 9.5px; color: var(--muted); letter-spacing: 1.5px; margin-top: 2px; }
+  .hspacer    { flex: 1; }
+  .standby {
+    display: flex; align-items: center; gap: 9px; font-family: var(--mono); font-size: 10px;
+    font-weight: 600; letter-spacing: 1.6px; color: var(--text2); border: 1px solid var(--border2);
+    border-radius: 9px; padding: 8px 14px; background: rgba(255,255,255,0.015);
+  }
+  .standby .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--yellow); box-shadow: 0 0 8px var(--yellow); }
+
+  /* ───────────── PAGE ───────────── */
+  .wrap { max-width: 1440px; margin: 0 auto; padding: 46px 40px 60px; }
+  .lede h1 { font-size: 34px; font-weight: 800; letter-spacing: -0.4px; margin-bottom: 12px; }
+  .lede p  { font-size: 15px; color: var(--text2); line-height: 1.6; max-width: 660px; }
+
+  .grid {
+    display: grid; grid-template-columns: minmax(0,1.32fr) minmax(0,1fr);
+    gap: 26px; margin-top: 38px; align-items: start;
+  }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 16px;
+    overflow: hidden;
+  }
+  .card-head {
+    display: flex; align-items: center; gap: 10px; padding: 17px 22px;
+    border-bottom: 1px solid var(--border);
+  }
+  .card-ico { color: var(--teal); display: flex; }
+  .card-title { font-family: var(--mono); font-weight: 700; font-size: 13px; letter-spacing: 1.8px; }
+  .card-tag  { margin-left: auto; font-family: var(--mono); font-size: 9.5px; letter-spacing: 1.6px; color: var(--muted); }
+
+  /* ───────────── SENSOR THRESHOLDS ───────────── */
+  .sensor-cols {
+    display: grid; grid-template-columns: 1fr 128px 128px; gap: 22px; align-items: center;
+    padding: 12px 24px; border-bottom: 1px solid var(--border);
+    font-family: var(--mono); font-size: 10px; letter-spacing: 1.5px; color: var(--muted);
+  }
+  .sensor-cols .col-c { text-align: center; }
+  .sensor-row {
+    display: grid; grid-template-columns: 1fr 128px 128px; gap: 22px; align-items: center;
+    padding: 17px 24px; border-bottom: 1px solid var(--border);
+  }
+  .sensor-row:last-child { border-bottom: none; }
+  .s-name  { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+  .s-name b { font-size: 14.5px; font-weight: 700; color: var(--text); }
+  .s-unit  { font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+  .s-lim   {
+    font-family: var(--mono); font-size: 8.5px; font-weight: 600; letter-spacing: 1.2px; color: var(--text2);
+    border: 1px solid var(--border2); border-radius: 6px; padding: 3px 7px;
+  }
+  .s-desc  { font-size: 12px; color: var(--muted); margin-top: 5px; width: 100%; }
+  .box-wrap { display: flex; justify-content: center; }
+  .box {
+    width: 108px; height: 48px; text-align: center; font-family: var(--mono); font-size: 17px;
+    font-weight: 700; color: var(--text); background: var(--card2); border: 1px solid var(--border2);
+    border-radius: 11px; outline: none; transition: border-color 0.15s, box-shadow 0.15s;
+    -moz-appearance: textfield;
+  }
+  .box::-webkit-outer-spin-button, .box::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .box.min:focus { border-color: var(--yellow); box-shadow: 0 0 0 3px rgba(251,191,36,0.14); }
+  .box.max:focus { border-color: var(--red);    box-shadow: 0 0 0 3px rgba(248,113,113,0.14); }
+  .sensor-row.invalid .box { border-color: var(--red); box-shadow: 0 0 0 3px rgba(248,113,113,0.16); }
+
+  /* ───────────── ROLE ───────────── */
+  .role-body { padding: 20px 22px; }
+  .role-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+  .role-card {
+    position: relative; border: 1px solid var(--border2); border-radius: 14px;
+    background: rgba(255,255,255,0.012); padding: 20px 20px 22px; cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s, background 0.15s, transform 0.12s;
+  }
+  .role-card:hover { transform: translateY(-2px); border-color: rgba(94,234,212,0.4); }
+  .role-card .r-ico { color: var(--muted); margin-bottom: 20px; display: flex; transition: color 0.15s; }
+  .role-card .r-title { font-size: 16px; font-weight: 700; color: var(--text); }
+  .role-card .r-sub { font-family: var(--mono); font-size: 10px; letter-spacing: 1.6px; color: var(--muted); margin-top: 4px; }
+  .role-card.sel {
+    border-color: var(--teal); background: rgba(94,234,212,0.06);
+    box-shadow: 0 0 22px rgba(94,234,212,0.14), inset 0 0 30px rgba(94,234,212,0.04);
+  }
+  .role-card.sel .r-ico { color: var(--teal); }
+  .role-card .r-check {
+    position: absolute; top: 15px; right: 15px; width: 18px; height: 18px; border-radius: 50%;
+    background: var(--teal); color: #04211c; display: none; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 800;
+  }
+  .role-card.sel .r-check { display: flex; }
+
+  .role-note {
+    display: flex; gap: 12px; align-items: flex-start; margin-top: 20px; padding: 15px 17px;
+    border: 1px solid var(--border2); border-left: 3px solid var(--teal); border-radius: 12px;
+    background: rgba(94,234,212,0.04); font-size: 13px; color: var(--text2); line-height: 1.5;
+  }
+
+  .enter-btn {
+    width: 100%; margin-top: 18px; height: 58px; border-radius: 14px; cursor: pointer;
+    font-family: var(--mono); font-size: 13px; font-weight: 700; letter-spacing: 2.4px;
+    display: flex; align-items: center; justify-content: center; gap: 12px;
+    color: var(--muted); background: rgba(255,255,255,0.02); border: 1px solid var(--border2);
+    transition: all 0.18s;
+  }
+  .enter-btn.ready {
+    color: #04211c; background: linear-gradient(90deg, var(--teal), var(--teal-dim));
+    border-color: var(--teal); box-shadow: 0 0 22px rgba(94,234,212,0.28);
+  }
+  .enter-btn.ready:hover { filter: brightness(1.06); box-shadow: 0 0 30px rgba(94,234,212,0.42); }
+  .enter-btn:not(.ready) { cursor: not-allowed; }
+  .enter-hint { margin-top: 11px; font-family: var(--mono); font-size: 10px; letter-spacing: 1.2px; color: var(--muted2); text-align: center; min-height: 13px; }
+
+  @media (max-width: 940px) { .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<!-- HEADER — same ARGUS mark as the control room -->
+<div class="header">
+  <div class="logo-block">
+    <span class="logo-mark">
+      <svg width="30" height="30" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+        <circle cx="14.5" cy="20" r="9" stroke="currentColor" stroke-width="6"/>
+        <rect x="24.5" y="7" width="6" height="26" rx="3" fill="currentColor" transform="rotate(20 27.5 20)"/>
+      </svg>
+    </span>
+    <span class="logo-txt">
+      <span class="logo-name">FABWATCH</span>
+      <span class="logo-sub">FAB 2 · PHOENIX · PRE-SHIFT SETUP</span>
+    </span>
+  </div>
+  <div class="hspacer"></div>
+  <div class="standby"><span class="dot"></span> AGENT STANDBY</div>
+</div>
+
+<!-- PAGE -->
+<div class="wrap">
+  <div class="lede">
+    <h1>Before you take the floor</h1>
+    <p>Set the thresholds the anomaly agent will watch for, then tell us the role you're covering
+       this shift. The agent labels every incoming signal against these limits.</p>
+  </div>
+
+  <div class="grid">
+    <!-- SENSOR THRESHOLDS -->
+    <div class="card">
+      <div class="card-head">
+        <span class="card-ico">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 12h4l2.5 7 5-14L17 12h4"/>
+          </svg>
+        </span>
+        <span class="card-title">SENSOR THRESHOLDS</span>
+        <span class="card-tag">ANOMALY LABELING</span>
+      </div>
+      <div class="sensor-cols">
+        <div>SENSOR</div>
+        <div class="col-c">MIN</div>
+        <div class="col-c">MAX</div>
+      </div>
+      <div id="sensorRows"></div>
+    </div>
+
+    <!-- YOUR ROLE -->
+    <div class="card">
+      <div class="card-head">
+        <span class="card-ico">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="8" r="3.4"/><path d="M5.5 20a6.5 6.5 0 0113 0"/>
+          </svg>
+        </span>
+        <span class="card-title">YOUR ROLE</span>
+        <span class="card-tag">THIS SHIFT</span>
+      </div>
+      <div class="role-body">
+        <div class="role-grid" id="roleGrid"></div>
+        <div class="role-note">
+          <span class="mono" style="color:var(--teal);">▍</span>
+          Select the role you're covering this shift to tailor what the agent surfaces first.
+        </div>
+        <button class="enter-btn" id="enterBtn">
+          ENTER CONTROL ROOM
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </button>
+        <div class="enter-hint" id="enterHint"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ─── The 5 sensors the Production Agent monitors (USER_THRESHOLDS in
+      agents/production_agent.py). Defaults mirror the current hard-coded band.
+      Whatever the user sets here overrides those defaults for the shift. ─── */
+const SENSORS = [
+  { key: 'tcp_top_pwr', name: 'TCP Source Power', unit: 'W',     lim: 'RANGE', desc: 'Top-electrode plasma source power',           min: 334, max: 360  },
+  { key: 'bcl3_flow',   name: 'BCl₃ Gas Flow',    unit: 'sccm',  lim: 'RANGE', desc: 'Boron trichloride mass flow into chamber',   min: 740, max: 765  },
+  { key: 'cl2_flow',    name: 'Cl₂ Gas Flow',     unit: 'sccm',  lim: 'RANGE', desc: 'Chlorine mass flow into chamber',            min: 748, max: 758  },
+  { key: 'pressure',    name: 'Chamber Pressure', unit: 'mTorr', lim: 'RANGE', desc: 'Process chamber pressure vs recipe baseline',min: 942, max: 1420 },
+  { key: 'rf_btm_pwr',  name: 'RF Bias Power',    unit: 'W',     lim: 'RANGE', desc: 'Bottom-electrode RF bias power',             min: 124, max: 142  },
+];
+
+/* Role keys match supervisor_agent.ROLES so result[role] filtering is trivial. */
+const ROLES = [
+  { key: 'operator',         title: 'Operator',         sub: 'LINE',  icon: '<path d="M12 3l7 3v5c0 4.4-3 7.8-7 9-4-1.2-7-4.6-7-9V6l7-3z"/>' },
+  { key: 'supervisor',       title: 'Shift Supervisor', sub: 'FLOOR', icon: '<path d="M5 20V11M12 20V4M19 20v-6"/>' },
+  { key: 'quality_engineer', title: 'Quality Engineer', sub: 'YIELD', icon: '<circle cx="12" cy="12" r="9"/><path d="M8.3 12.4l2.5 2.5 4.9-5.3"/>' },
+  { key: 'maintenance_lead', title: 'Maintenance Lead', sub: 'PM',    icon: '<path d="M14.7 6.3a4 4 0 00-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 005.4-5.4l-2.6 2.6-2.4-2.4 2.6-2.6z"/>' },
+];
+
+const STORAGE_KEY = 'fabwatch_shift_config';
+let selectedRole = null;
+
+/* ─── Restore any previous shift config (so re-entry keeps the last setup) ─── */
+let saved = {};
+try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch (e) { saved = {}; }
+if (saved.thresholds) {
+  SENSORS.forEach(s => {
+    const t = saved.thresholds[s.key];
+    if (t && isFinite(t.min) && isFinite(t.max)) { s.min = t.min; s.max = t.max; }
+  });
+}
+if (saved.role && ROLES.some(r => r.key === saved.role)) selectedRole = saved.role;
+
+/* ─── Render sensor rows ─── */
+const sensorRows = document.getElementById('sensorRows');
+sensorRows.innerHTML = SENSORS.map(s => `
+  <div class="sensor-row" data-sensor="${s.key}">
+    <div class="s-name">
+      <b>${s.name}</b><span class="s-unit">${s.unit}</span><span class="s-lim">${s.lim}</span>
+      <span class="s-desc">${s.desc}</span>
+    </div>
+    <div class="box-wrap"><input class="box min" type="number" inputmode="decimal" data-key="${s.key}" data-bound="min" value="${s.min}"></div>
+    <div class="box-wrap"><input class="box max" type="number" inputmode="decimal" data-key="${s.key}" data-bound="max" value="${s.max}"></div>
+  </div>
+`).join('');
+
+/* ─── Render role cards ─── */
+const roleGrid = document.getElementById('roleGrid');
+roleGrid.innerHTML = ROLES.map(r => `
+  <div class="role-card${r.key === selectedRole ? ' sel' : ''}" data-role="${r.key}">
+    <div class="r-check">✓</div>
+    <div class="r-ico"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${r.icon}</svg></div>
+    <div class="r-title">${r.title}</div>
+    <div class="r-sub">${r.sub}</div>
+  </div>
+`).join('');
+
+roleGrid.querySelectorAll('.role-card').forEach(card => {
+  card.addEventListener('click', () => {
+    selectedRole = card.dataset.role;
+    roleGrid.querySelectorAll('.role-card').forEach(c => c.classList.toggle('sel', c === card));
+    refresh();
+  });
+});
+
+/* ─── Validation + ready state ─── */
+const enterBtn = document.getElementById('enterBtn');
+const enterHint = document.getElementById('enterHint');
+
+function readThresholds() {
+  const out = {}; let allValid = true;
+  SENSORS.forEach(s => {
+    const row  = sensorRows.querySelector(`.sensor-row[data-sensor="${s.key}"]`);
+    const minV = parseFloat(row.querySelector('[data-bound="min"]').value);
+    const maxV = parseFloat(row.querySelector('[data-bound="max"]').value);
+    const ok   = isFinite(minV) && isFinite(maxV) && minV < maxV;
+    row.classList.toggle('invalid', !ok);
+    if (!ok) allValid = false;
+    out[s.key] = { min: minV, max: maxV };
+  });
+  return { thresholds: out, allValid };
+}
+
+function refresh() {
+  const { allValid } = readThresholds();
+  const ready = allValid && !!selectedRole;
+  enterBtn.classList.toggle('ready', ready);
+  if (ready)            enterHint.textContent = '';
+  else if (!allValid)   enterHint.textContent = 'EACH SENSOR NEEDS MIN < MAX';
+  else                  enterHint.textContent = 'SELECT YOUR ROLE TO CONTINUE';
+  return ready;
+}
+
+sensorRows.querySelectorAll('.box').forEach(inp => inp.addEventListener('input', refresh));
+
+/* ─── Enter the control room ─── */
+enterBtn.addEventListener('click', async () => {
+  if (!refresh()) return;
+  const { thresholds } = readThresholds();
+  const payload = { role: selectedRole, thresholds, saved_at: new Date().toISOString() };
+
+  // 1) local copy so the choice survives even without the server (file:// etc.)
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(payload)); } catch (e) {}
+
+  // 2) push to the server so production_agent.py picks it up (shift_config.json).
+  //    Failure is non-fatal — we still proceed into the control room.
+  try {
+    await fetch('/api/shift-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  } catch (e) { /* offline / static host — localStorage still holds it */ }
+
+  window.location.href = 'fabwatch_dashboard.html';
+});
+
+refresh();
+</script>
+</body>
+</html>
