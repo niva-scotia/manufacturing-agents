@@ -49,6 +49,7 @@ _ROOT = _HERE.parent
 from dashboard_export import (          # noqa: E402
     detect_offline, build_payload, write_dashboard_json,
     THRESHOLDS, TREND_CONFIG, _wafer_start, _event_time,
+    select_production_day, filter_machine_to_day,
 )
 
 
@@ -72,6 +73,12 @@ def main():
     machine_df = pd.read_csv(_ROOT / "data" / "train_machine.csv")
     machine_df.columns = [c.strip().lower().replace(" ", "_") for c in machine_df.columns]
     summary_df = pd.read_csv(_ROOT / "data" / "train_summary.csv")
+    # Replay ONE production day so the sim clock is a real, monotonic timeline
+    # (the CSV holds multiple dates; collapsing them onto one 24h clock is the
+    # source of the "06:02:15 isn't in the data" confusion — see ISSUES.md #1).
+    summary_df, day = select_production_day(summary_df)
+    machine_df = filter_machine_to_day(machine_df, summary_df)
+    print(f"[sim] production day: {day}  ({len(summary_df)} wafers, {len(machine_df)} rows)")
     wafer_start = _wafer_start(summary_df)
 
     # Clear the board immediately so the dashboard starts EMPTY (no errors, no

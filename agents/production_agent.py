@@ -889,8 +889,21 @@ if trends:
 # (front_end/fabwatch_dashboard.html) fetches this file and auto-refreshes,
 # so the UI reflects the agent's real findings.
 try:
-    from dashboard_export import build_payload, write_dashboard_json
-    _payload = build_payload(anomalies, trends, data, _summary, USER_THRESHOLDS)
+    from dashboard_export import (
+        build_payload, write_dashboard_json,
+        select_production_day, filter_machine_to_day,
+    )
+    # Export a SINGLE production day so the dashboard timeline is coherent (the
+    # CSV spans multiple dates; see ISSUES.md #1). Detection above still ran over
+    # the full data — we only scope what the dashboard shows.
+    _summary_day, _day = select_production_day(_summary)
+    _day_wafers = set(_summary_day["wafer_id"])
+    _data_day = data[data["wafer_id"].isin(_day_wafers)].copy()
+    _anoms_day  = [a for a in anomalies if a["wafer_id"] in _day_wafers]
+    _trends_day = [t for t in trends    if t["wafer_id"] in _day_wafers]
+    print(f"[dashboard_export] exporting production day {_day}: "
+          f"{len(_anoms_day)} anomalies, {len(_trends_day)} trends")
+    _payload = build_payload(_anoms_day, _trends_day, _data_day, _summary_day, USER_THRESHOLDS)
     write_dashboard_json(_payload, str(_ROOT / "front_end" / "dashboard_data.json"))
 except Exception as _e:
     print(f"[dashboard_export] skipped: {_e}")

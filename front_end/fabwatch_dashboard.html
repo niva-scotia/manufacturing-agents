@@ -193,7 +193,8 @@
   .tag.anomaly { color: var(--teal); border: 1px solid rgba(94,234,212,0.4); background: rgba(94,234,212,0.07); }
   .tag.quality { color: var(--green); border: 1px solid rgba(52,211,153,0.4); background: rgba(52,211,153,0.07); }
   .tag.trend   { color: var(--yellow); border: 1px solid rgba(251,191,36,0.4); background: rgba(251,191,36,0.07); }
-  .err-desc { font-size: 13.5px; color: var(--text); margin: 9px 0 7px; line-height: 1.45; }
+  .err-desc { font-size: 13.5px; color: var(--text); margin: 9px 0 5px; line-height: 1.45; }
+  .err-meta { font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.4px; color: var(--text2); margin-bottom: 6px; }
   .err-id { font-family: var(--mono); font-size: 10px; letter-spacing: 1px; color: var(--muted); }
 
   /* ───────────── TREND WATCH ───────────── */
@@ -455,7 +456,7 @@
 const DEMO = {
   generated_at: null,
   counts: { fault: 1, watch: 0, ok: 1 },
-  critical: { id: 'ANM-4410', chamber: 'CHA', pc: 'TCP TOP PWR', text: 'TCP TOP PWR +1.00 above max', time: '14:32:46' },
+  critical: { id: 'ANM-4410', chamber: 'CHA', pc: 'TCP TOP PWR', text: 'TCP TOP PWR +1.00 above max', s: '14:32:46' },
   chambers: {
     CHA: {
       name: 'CHA', status: 'fault', monitored: true,
@@ -488,8 +489,10 @@ const DEMO = {
     }
   },
   errors: [
-    { chamber: 'CHA', pc: 'TCP TOP PWR', type: 'anomaly', text: 'TCP TOP PWR out of range — +1.00 above max', id: 'ANM-4408', time: '14:32:42' },
-    { chamber: 'CHA', pc: 'BCl3 FLOW', type: 'anomaly', text: 'BCl3 FLOW out of range — -15.53 below min', id: 'ANM-4405', time: '14:31:55' },
+    { chamber: 'CHA', pc: 'TCP TOP PWR', type: 'anomaly', text: 'TCP TOP PWR out of range — +1.00 above max', id: 'ANM-4408', time: '14:32:42',
+      wafer_id: 2903, lot: 'LOT_31B', sensor: 'tcp_top_pwr', value: 361.0, unit: 'W', threshold_min: 334, threshold_max: 360, deviation: '+1.00 above max', step: 40, explanation: '' },
+    { chamber: 'CHA', pc: 'BCl3 FLOW', type: 'anomaly', text: 'BCl3 FLOW out of range — -15.53 below min', id: 'ANM-4405', time: '14:31:55',
+      wafer_id: 2901, lot: 'LOT_31B', sensor: 'bcl3_flow', value: 724.47, unit: 'sccm', threshold_min: 740, threshold_max: 765, deviation: '-15.53 below min', step: 88, explanation: '' },
   ],
   trends: [
     { label: 'CHA · PRESSURE', pct: 60, tone: 'yellow', status: 'rising — monitoring',
@@ -629,9 +632,27 @@ function renderChambers() {
   });
 }
 
+function errMeta(e) {
+  // Per-event identity so each tile is distinct and traceable to the dataset.
+  // One tile = one wafer excursion; multi-step breaches show peak + count + span.
+  if (e.wafer_id == null) return '';
+  const bits = [`Wafer ${e.wafer_id}`];
+  const n = e.breach_count || 1;
+  if (n > 1) {
+    bits.push(`peak ${e.value}${e.unit ? ' ' + e.unit : ''}`);
+    bits.push(e.duration_sec ? `${n} steps over ${e.duration_sec}s` : `${n} steps`);
+  } else {
+    if (e.value != null) bits.push(`${e.value}${e.unit ? ' ' + e.unit : ''}`);
+    if (e.step != null)  bits.push(`step ${e.step}`);
+  }
+  if (e.lot && e.lot !== '—') bits.push(e.lot);
+  return bits.join(' · ');
+}
 function renderErrors() {
   const errors = state.errors || [];
-  document.getElementById('errorsList').innerHTML = errors.map(e => `
+  document.getElementById('errorsList').innerHTML = errors.map(e => {
+    const meta = errMeta(e);
+    return `
     <div class="err-card ${e.type}" data-id="${e.id}" data-ch="${e.chamber}">
       <div class="err-top">
         <span class="err-ch">${e.chamber}</span>
@@ -640,12 +661,15 @@ function renderErrors() {
         <span class="err-time">${e.time}</span>
       </div>
       <div class="err-desc">${e.text}</div>
+      ${meta ? `<div class="err-meta">${meta}</div>` : ''}
       <div class="err-id">${e.id}</div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
   document.getElementById('err-red').textContent = errors.filter(e => e.type === 'anomaly').length;
   document.getElementById('err-yellow').textContent = errors.filter(e => e.type === 'trend').length;
   document.querySelectorAll('.err-card').forEach(el => {
-    el.addEventListener('click', () => { if (state.chambers[el.dataset.ch]) openDetail(el.dataset.ch); });
+    // Open THIS specific event, not the chamber's most-recent rollup.
+    el.addEventListener('click', () => openErrorDetail(el.dataset.id));
   });
 }
 
@@ -709,6 +733,73 @@ function openModal(html, cls) {
 function closeModal() { backdrop.classList.remove('show'); mount.innerHTML = ''; }
 backdrop.addEventListener('click', e => { if (e.target === backdrop) closeModal(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+function openErrorDetail(id) {
+  // Show the SPECIFIC error this tile represents — its own wafer, value, time
+  // and thresholds — rather than the chamber's latest breach.
+  const e = (state.errors || []).find(x => x.id === id);
+  if (!e) return;
+  const ch = state.chambers[e.chamber];
+  const col = STATUS_COLOR[ch ? ch.status : 'fault'];
+  const label = e.type === 'anomaly' ? 'Anomaly' : e.type === 'quality' ? 'Quality' : 'Trend';
+  const hasThr = e.threshold_min != null && e.threshold_max != null;
+  const rangeStr = hasThr ? `${e.threshold_min} – ${e.threshold_max}` : '—';
+  const multi = (e.breach_count || 1) > 1;
+  const valLabel = multi ? 'PEAK VALUE' : 'MEASURED VALUE';
+  const stepCell = multi ? `${e.breach_count} · ${e.first_step}–${e.last_step}` : (e.step ?? '—');
+  const stepsHtml = (e.steps && e.steps.length > 1) ? `
+      <div class="findings-label" style="margin-top:16px;">BREACH READINGS · ${e.steps.length}${e.duration_sec ? ' over ' + e.duration_sec + 's' : ''}</div>
+      <div class="findings-scroll" style="max-height:200px;overflow:auto;">
+        ${e.steps.map(s => `
+          <div class="finding">
+            <span class="fdot" style="background:var(--red);box-shadow:0 0 6px var(--red);"></span>
+            <div class="finding-top"><span class="finding-pc">step ${s.step}</span></div>
+            <span class="finding-time">${s.time}</span>
+            <div class="finding-desc">${s.value}${e.unit ? ' ' + e.unit : ''}</div>
+          </div>`).join('')}
+      </div>` : '';
+  const expl = e.explanation
+    ? `<div class="findings-label" style="margin-top:16px;">WHY IT MATTERS</div><div class="cost-desc">${e.explanation}</div>`
+    : '';
+  openModal(`
+    <div class="modal-head">
+      <span class="dot" style="background:${col};box-shadow:0 0 7px ${col};"></span>
+      <span class="modal-title">EVENT DETAIL</span>
+      <span class="modal-sub">${e.id}</span>
+      <button class="modal-x" data-close>✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="md-title">
+        <span class="md-name">${e.pc}</span>
+        <span class="tag ${e.type}">${label}</span>
+      </div>
+      <div class="md-machine">${e.chamber}${ch ? ' · ' + ch.machine : ''}</div>
+      <div class="md-meta">
+        <div class="kv"><label>WAFER</label><span>${e.wafer_id ?? '—'}</span></div>
+        <div class="kv"><label>LOT</label><span>${e.lot ?? '—'}</span></div>
+        <div class="kv"><label>CHAMBER</label><span>${e.chamber}</span></div>
+        <div class="kv"><label>${multi ? 'BREACH STEPS' : 'STEP'}</label><span>${stepCell}</span></div>
+        <div class="kv"><label>${multi ? 'FIRST BREACH' : 'DETECTED'}</label><span>${e.time}</span></div>
+        <div class="kv"><label>TYPE</label><span>${label}</span></div>
+      </div>
+      <div class="stat-grid">
+        <div class="stat-box"><label>${valLabel}</label><div class="val">${e.value ?? '—'} <span class="unit">${e.unit || ''}</span></div></div>
+        <div class="stat-box"><label>ALLOWED RANGE</label><div class="val" style="font-size:16px;">${rangeStr} <span class="unit">${hasThr ? (e.unit || '') : ''}</span></div></div>
+      </div>
+      <div class="stat-box" style="margin-bottom:14px;">
+        <label>${multi ? 'PEAK DEVIATION' : 'DEVIATION'}</label>
+        <div class="val" style="font-size:16px;color:var(--red);">${e.deviation || e.text}</div>
+      </div>
+      ${stepsHtml}
+      ${expl}
+      <button class="fix-btn" id="evtChamberBtn"
+        style="margin-top:16px;background:rgba(255,255,255,0.03);color:var(--text2);border:1px solid var(--border2);">
+        VIEW CHAMBER ${e.chamber} →
+      </button>
+    </div>`, 'detail');
+  const cbtn = document.getElementById('evtChamberBtn');
+  if (cbtn) cbtn.addEventListener('click', () => { if (state.chambers[e.chamber]) openDetail(e.chamber); });
+}
 
 function openDetail(key) {
   const ch = state.chambers[key];

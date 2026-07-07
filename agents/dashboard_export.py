@@ -33,6 +33,10 @@ THRESHOLDS = {s[0]: s[3] for s in SENSORS}
 THRESHOLDS["cl2_flow"] = {"min": 748, "max": 758}
 LABELS = {s[0]: s[1] for s in SENSORS}
 UNITS  = {s[0]: s[2] for s in SENSORS}
+# cl2_flow is monitored but not one of the 4 chamber-card sensors; give it a
+# label/unit so per-event error tiles for it still render cleanly.
+LABELS.setdefault("cl2_flow", "CL2 FLOW")
+UNITS.setdefault("cl2_flow", "sccm")
 
 TREND_CONFIG = {
     "min_steps": 8, "min_range_fraction": 0.15, "min_r_squared": 0.85,
@@ -149,8 +153,41 @@ def detect_offline(machine_df, thresholds, cfg, wafer_start=None):
 # ════════════════════════════════════════════════════════════════════════════
 #  Payload builder  (logs + raw data → dashboard JSON)
 # ════════════════════════════════════════════════════════════════════════════
+def select_production_day(summary_df, day=None):
+    """Restrict the run to a SINGLE production day so the replay clock is coherent
+    and every timestamp maps to exactly one real wafer.
+
+    data/train_summary.csv holds multiple calendar dates (e.g. 2024-03-04 and
+    2024-03-25). The feed elsewhere keeps only HH:MM:SS, so without this filter
+    both days collapse onto one 24h clock and a later day's wafer (06:02:15) sorts
+    ahead of the earlier day's — the "fake timestamp" bug.
+
+    Returns (filtered_summary_df, day_str). Default day = earliest date present;
+    override with the `day` arg or the SIM_DATE=YYYY-MM-DD environment variable.
+    """
+    if "run_start" not in summary_df.columns or summary_df.empty:
+        return summary_df, None
+    dates = pd.to_datetime(summary_df["run_start"], errors="coerce").dt.date
+    day = day or os.environ.get("SIM_DATE")
+    target = pd.to_datetime(day).date() if day else dates.dropna().min()
+    filtered = summary_df[dates == target].copy()
+    return filtered, str(target)
+
+
+def filter_machine_to_day(machine_df, summary_df):
+    """Keep only the machine rows whose wafers belong to the selected-day summary."""
+    wafers = set(summary_df["wafer_id"])
+    return machine_df[machine_df["wafer_id"].isin(wafers)].copy()
+
+
 def _wafer_chamber(summary_df):
     return summary_df.set_index("wafer_id")["chamber_id"].to_dict()
+
+
+def _wafer_lot(summary_df):
+    """wafer_id → lot_id, so each incoming-error tile can name its own lot."""
+    return (summary_df.set_index("wafer_id")["lot_id"].to_dict()
+            if "lot_id" in summary_df.columns else {})
 
 
 def _wafer_start(summary_df):
@@ -167,6 +204,25 @@ def _event_time(raw, fallback=""):
     if "T" in s: return s.split("T", 1)[1][:8]
     if " " in s: return s.split(" ", 1)[1][:8]
     return fallback or s
+
+
+def _event_time_offset(raw, offset_sec, fallback=""):
+    """run_start + offset_sec → "HH:MM:SS" (time-of-day).
+
+    offset_sec is the reading's time_sec — seconds INTO the wafer run — so the
+    stamp is the real moment the breach occurred, not the wafer's start time
+    (which every step of a wafer shares). Keeps to a 24h clock, matching the
+    single-production-day design.
+    """
+    base = _event_time(raw, "")
+    if not base or ":" not in base:
+        return fallback
+    try:
+        h, m, s = (int(x) for x in base.split(":"))
+    except ValueError:
+        return fallback or base
+    total = (h * 3600 + m * 60 + s + int(round(float(offset_sec or 0)))) % 86400
+    return f"{total // 3600:02d}:{(total % 3600) // 60:02d}:{total % 60:02d}"
 
 
 def _fmt(v, nd=1):
@@ -191,11 +247,72 @@ def _secs(hms):
         return -1
 
 
+def _aggregate_anomalies(anomaly_log, machine_df, summary_df):
+    """Collapse per-step breaches into ONE episode per (wafer, sensor).
+
+    The detection engine flags every out-of-range reading, so one wafer whose
+    sensor sits over the limit at several steps yields many near-identical
+    records. Operators think in wafer excursions ("wafer 2911 TCP out of range"),
+    not individual step readings — so we group by (wafer_id, sensor) and emit a
+    single event with:
+      • timestamp  = the FIRST breach's true time (run_start + time_sec)
+      • value      = the PEAK reading (furthest outside the band)
+      • breach_count / first_step / last_step / duration_sec
+      • steps[]    = every individual breach (step, value, true time) for drill-in
+
+    Centralised here so both the offline feed (detect_offline) and the real
+    chain (production_agent.run_agent) collapse identically.
+    """
+    if not anomaly_log:
+        return []
+
+    ws = _wafer_start(summary_df)
+    # (wafer_id, step) → time_sec, so each breach gets its real in-run offset.
+    tmap = {}
+    if "time_sec" in machine_df.columns:
+        for wid, step, tsec in zip(machine_df["wafer_id"], machine_df["step"],
+                                   machine_df["time_sec"]):
+            tmap[(int(wid), int(step))] = float(tsec)
+
+    groups = {}
+    for a in anomaly_log:
+        groups.setdefault((a["wafer_id"], a["sensor"]), []).append(a)
+
+    episodes = []
+    for (wid, sensor), items in groups.items():
+        rng = {"min": items[0]["threshold_min"], "max": items[0]["threshold_max"]}
+        for it in items:
+            it["_t"] = tmap.get((int(wid), int(it["step"])), 0.0)
+        ordered = sorted(items, key=lambda x: x["_t"])
+        overshoot = lambda v: max(v - rng["max"], rng["min"] - v, 0)
+        peak = max(items, key=lambda x: overshoot(x["value"]))
+        first, last = ordered[0], ordered[-1]
+        episodes.append({
+            "timestamp": _event_time_offset(ws.get(wid), first["_t"]),
+            "wafer_id": wid, "sensor": sensor, "step": peak["step"],
+            "value": peak["value"],
+            "threshold_min": rng["min"], "threshold_max": rng["max"],
+            "explanation": peak.get("explanation", ""),
+            "breach_count": len(items),
+            "first_step": first["step"], "last_step": last["step"],
+            "duration_sec": round(last["_t"] - first["_t"], 1),
+            "steps": [{"step": it["step"], "value": round(float(it["value"]), 2),
+                       "time": _event_time_offset(ws.get(wid), it["_t"])}
+                      for it in ordered],
+        })
+    episodes.sort(key=lambda e: e["timestamp"])
+    return episodes
+
+
 def build_payload(anomaly_log, trend_log, machine_df, summary_df, thresholds=None):
     thresholds = thresholds or THRESHOLDS
     machine_df = machine_df.copy()
     machine_df.columns = [c.strip().lower().replace(" ", "_") for c in machine_df.columns]
     w2c = _wafer_chamber(summary_df)
+    w2l = _wafer_lot(summary_df)
+
+    # Collapse per-step breaches into one episode per wafer+sensor (see helper).
+    anomaly_log = _aggregate_anomalies(anomaly_log, machine_df, summary_df)
 
     # Event times are already carried on each record (production_agent stamps
     # them from run_start; detect_offline does the same). We just pull them
@@ -212,10 +329,30 @@ def build_payload(anomaly_log, trend_log, machine_df, summary_df, thresholds=Non
     #    renumber as the feed grows). ──
     for i, a in enumerate(anomaly_log):
         a.setdefault("_id", f"ANM-{4401 + i}")
+        rng = {"min": a["threshold_min"], "max": a["threshold_max"]}
+        label = LABELS.get(a["sensor"], a["sensor"])
         errors.append({
-            "chamber": a["chamber"], "pc": LABELS.get(a["sensor"], a["sensor"]), "type": "anomaly",
-            "text": f"{LABELS.get(a['sensor'], a['sensor'])} out of range — {_dev_string(a['value'], {'min': a['threshold_min'], 'max': a['threshold_max']})}",
+            "chamber": a["chamber"], "pc": label, "type": "anomaly",
+            "text": f"{label} out of range — {_dev_string(a['value'], rng)}",
             "id": a["_id"], "time": a["timestamp"],
+            # ── per-event identity: makes every tile unique + traceable to the
+            #    dataset, and lets the UI open THIS event (not the chamber's
+            #    latest breach) when a tile is clicked. ──
+            "wafer_id": a["wafer_id"],
+            "lot": str(w2l.get(a["wafer_id"], "—")),
+            "sensor": a["sensor"],
+            "value": round(float(a["value"]), 2),
+            "unit": UNITS.get(a["sensor"], ""),
+            "threshold_min": rng["min"], "threshold_max": rng["max"],
+            "deviation": _dev_string(a["value"], rng),
+            "step": a.get("step"),
+            "explanation": a.get("explanation", ""),
+            # episode aggregation — the tile is one wafer excursion, not one step
+            "breach_count": a.get("breach_count", 1),
+            "first_step": a.get("first_step", a.get("step")),
+            "last_step": a.get("last_step", a.get("step")),
+            "duration_sec": a.get("duration_sec", 0),
+            "steps": a.get("steps", []),
         })
     for i, t in enumerate(trend_log):
         t.setdefault("_id", f"TRD-{1101 + i}")
@@ -377,6 +514,11 @@ def main():
     machine_df = pd.read_csv(_ROOT / "data" / "train_machine.csv")
     machine_df.columns = [c.strip().lower().replace(" ", "_") for c in machine_df.columns]
     summary_df = pd.read_csv(_ROOT / "data" / "train_summary.csv")
+    # Single production day only — otherwise two calendar days collapse onto one
+    # 24h clock and timestamps look fabricated (see ISSUES.md #1).
+    summary_df, day = select_production_day(summary_df)
+    machine_df = filter_machine_to_day(machine_df, summary_df)
+    print(f"[dashboard_export] production day: {day}  ({len(summary_df)} wafers)")
     print(f"[dashboard_export] scanning {len(machine_df)} rows offline (no LLM)…")
     anomaly_log, trend_log = detect_offline(machine_df, THRESHOLDS, TREND_CONFIG,
                                             wafer_start=_wafer_start(summary_df))
