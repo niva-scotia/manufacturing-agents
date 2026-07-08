@@ -43,6 +43,44 @@ TREND_CONFIG = {
     "min_seconds_to_breach": 5, "max_seconds_to_breach": 86400,
 }
 
+# ── Pre-shift onboarding config (thresholds + role the operator set) ──────────
+# front_end/onboarding.html POSTs these to serve_dashboard.py, which writes
+# shift_config.json at the repo root. Every feed producer resolves thresholds
+# through resolve_thresholds() so the USER'S limits — not the hard-coded ones —
+# label anomalies and trends. Absent/malformed file → hard-coded defaults.
+SHIFT_CONFIG_PATH = _ROOT / "shift_config.json"
+
+
+def load_shift_config():
+    """Return the onboarding config dict ({thresholds, role, ...}) or {}."""
+    try:
+        if SHIFT_CONFIG_PATH.exists():
+            return json.loads(SHIFT_CONFIG_PATH.read_text())
+    except (json.JSONDecodeError, OSError):
+        pass
+    return {}
+
+
+def resolve_thresholds(base=None):
+    """THRESHOLDS with the operator's onboarding overrides applied (per sensor,
+    only when min < max). Returns a fresh dict; never mutates the base."""
+    thresholds = {k: dict(v) for k, v in (base or THRESHOLDS).items()}
+    for sensor, rng in (load_shift_config().get("thresholds") or {}).items():
+        if sensor not in thresholds:
+            continue
+        try:
+            lo, hi = float(rng["min"]), float(rng["max"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if lo < hi:
+            thresholds[sensor] = {"min": lo, "max": hi}
+    return thresholds
+
+
+def shift_role():
+    """The role/position the operator selected at onboarding, or None."""
+    return load_shift_config().get("role")
+
 # Static plant-floor context for the Live View modal (support tools that the
 # agent does not monitor — CHA / CHB are filled in from live status).
 SUPPORT_TOOLS = [
@@ -421,7 +459,11 @@ def build_payload(anomaly_log, trend_log, machine_df, summary_df, thresholds=Non
                                 "unit": unit, "status": "fault"})
             elif last is not None and key in last:
                 val = float(last[key])
-                sstat = "fault" if _check_anomaly(val, rng) else "watch" if key in trended_sensors else "ok"
+                # Use the ACTIVE thresholds (user-set via onboarding) so a live
+                # value's colour matches what detection would flag, not the
+                # hard-coded SENSORS range.
+                srng = thresholds.get(key, rng)
+                sstat = "fault" if _check_anomaly(val, srng) else "watch" if key in trended_sensors else "ok"
                 sensors.append({"label": label, "value": _fmt(val, 1), "unit": unit, "status": sstat})
             else:
                 sensors.append({"label": label, "value": "—", "unit": unit, "status": "ok"})
@@ -492,6 +534,9 @@ def build_payload(anomaly_log, trend_log, machine_df, summary_df, thresholds=Non
         "generated_at": datetime.now().strftime("%H:%M:%S"),
         "counts": counts, "critical": critical,
         "chambers": chambers, "errors": errors, "trends": trends, "tools": tools,
+        # Live-pipeline progress (run_live_pipeline.py overrides these per stage).
+        # None on the offline/simulate/production paths → frontend shows idle.
+        "current_stage": None, "active_event_id": None,
     }
 
 
@@ -518,12 +563,14 @@ def main():
     # 24h clock and timestamps look fabricated (see ISSUES.md #1).
     summary_df, day = select_production_day(summary_df)
     machine_df = filter_machine_to_day(machine_df, summary_df)
+    thresholds = resolve_thresholds()   # user-set onboarding limits, or defaults
     print(f"[dashboard_export] production day: {day}  ({len(summary_df)} wafers)")
+    print(f"[dashboard_export] thresholds: {thresholds}")
     print(f"[dashboard_export] scanning {len(machine_df)} rows offline (no LLM)…")
-    anomaly_log, trend_log = detect_offline(machine_df, THRESHOLDS, TREND_CONFIG,
+    anomaly_log, trend_log = detect_offline(machine_df, thresholds, TREND_CONFIG,
                                             wafer_start=_wafer_start(summary_df))
     print(f"[dashboard_export] anomalies={len(anomaly_log)} trends={len(trend_log)}")
-    payload = build_payload(anomaly_log, trend_log, machine_df, summary_df, THRESHOLDS)
+    payload = build_payload(anomaly_log, trend_log, machine_df, summary_df, thresholds)
     write_dashboard_json(payload)
 
 

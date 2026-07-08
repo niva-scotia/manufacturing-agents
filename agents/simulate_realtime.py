@@ -49,7 +49,7 @@ _ROOT = _HERE.parent
 from dashboard_export import (          # noqa: E402
     detect_offline, build_payload, write_dashboard_json,
     THRESHOLDS, TREND_CONFIG, _wafer_start, _event_time,
-    select_production_day, filter_machine_to_day,
+    select_production_day, filter_machine_to_day, resolve_thresholds,
 )
 
 
@@ -80,16 +80,19 @@ def main():
     machine_df = filter_machine_to_day(machine_df, summary_df)
     print(f"[sim] production day: {day}  ({len(summary_df)} wafers, {len(machine_df)} rows)")
     wafer_start = _wafer_start(summary_df)
+    # Use the operator's onboarding thresholds (falls back to defaults if none).
+    thresholds = resolve_thresholds()
+    print(f"[sim] thresholds: {thresholds}")
 
     # Clear the board immediately so the dashboard starts EMPTY (no errors, no
     # trends, both chambers nominal) while detection runs — otherwise it would
     # keep showing the previous full-day snapshot for the first few seconds.
-    blank = build_payload([], [], machine_df.iloc[0:0], summary_df.iloc[0:0], THRESHOLDS)
+    blank = build_payload([], [], machine_df.iloc[0:0], summary_df.iloc[0:0], thresholds)
     blank["generated_at"] = blank["sim_clock"] = "--:--:--"
     write_dashboard_json(blank, verbose=False)
 
     print("[sim] running detection over full history (real data, no LLM)…")
-    anoms, trends = detect_offline(machine_df, THRESHOLDS, TREND_CONFIG,
+    anoms, trends = detect_offline(machine_df, thresholds, TREND_CONFIG,
                                    wafer_start=wafer_start)
 
     # Chronological order + a seconds-of-day key, then STABLE ids so entries
@@ -134,7 +137,7 @@ def main():
             mdf = machine_df[machine_df["wafer_id"].isin(seen_wafers)]
             sdf = summary_df[summary_df["wafer_id"].isin(seen_wafers)]
 
-            payload = build_payload(ra, rt, mdf, sdf, THRESHOLDS)
+            payload = build_payload(ra, rt, mdf, sdf, thresholds)
             payload["generated_at"] = _fmt(sim)
             payload["sim_clock"] = _fmt(sim)
             write_dashboard_json(payload, verbose=False)

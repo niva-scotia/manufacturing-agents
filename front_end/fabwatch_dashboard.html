@@ -291,6 +291,8 @@
   .cost-panel.nominal .cost-figure { color: var(--green); }
   .cost-per { font-size: 20px; opacity: 0.8; }
   .cost-desc { font-size: 13px; color: var(--text2); line-height: 1.5; }
+  .cost-sub { font-family: var(--mono); font-size: 11px; letter-spacing: 0.4px; color: var(--red); margin-bottom: 9px; }
+  .cost-panel.nominal .cost-sub { color: var(--green); }
 
   /* How to fix button */
   .fix-btn {
@@ -312,6 +314,14 @@
   .pb-step-title { font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
   .pb-step-desc { font-size: 13.5px; color: var(--text2); line-height: 1.5; }
   .pb-note { display: flex; gap: 11px; font-size: 12.5px; color: var(--text2); line-height: 1.5; border: 1px solid var(--border2); border-radius: 12px; padding: 16px; background: rgba(79,143,247,0.05); }
+  /* Supervisor role blocks (Resolution Playbook) */
+  .pb-roles { display: flex; flex-direction: column; gap: 14px; }
+  .pb-role { border: 1px solid var(--border); border-radius: 12px; background: var(--card); padding: 14px 16px; }
+  .pb-role-head { display: flex; align-items: center; gap: 9px; font-family: var(--mono); font-size: 11px; font-weight: 700; letter-spacing: 1.6px; color: var(--teal); margin-bottom: 9px; }
+  .pb-role-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 7px var(--teal); flex-shrink: 0; }
+  .pb-role-summary { font-size: 13.5px; color: var(--text); line-height: 1.5; margin-bottom: 10px; }
+  .pb-action-list { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 7px; }
+  .pb-action-list li { font-size: 13px; color: var(--text2); line-height: 1.45; }
   .pb-note-ico { color: var(--blue); flex-shrink: 0; }
   .finding { display: grid; grid-template-columns: auto 1fr auto; gap: 10px 12px; align-items: start; padding: 13px 0; border-top: 1px solid var(--border); }
   .finding:first-of-type { border-top: none; }
@@ -731,6 +741,12 @@ function openModal(html, cls) {
   mount.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', closeModal));
 }
 function closeModal() { backdrop.classList.remove('show'); mount.innerHTML = ''; }
+// Escape agent-authored (LLM) text before inserting into HTML.
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
 backdrop.addEventListener('click', e => { if (e.target === backdrop) closeModal(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
@@ -823,18 +839,28 @@ function openDetail(key) {
         <div class="finding-id">${f.id}</div>
       </div>`;
   }).join('');
-  // Cost of Continued Run — output of the Sustainability Agent.
-  // PLACEHOLDER for now (ch.sustainability); wired to the real agent later.
-  const cost = ch.sustainability || placeholderCost(ch);
-  const costHtml = `
+  // Cost of Continued Run + "How to fix" are only meaningful when the chamber is
+  // actually in an error state — a nominal machine has no exposure and nothing to
+  // fix, so both are hidden. Cost is the REAL Sustainability Agent output
+  // (ch.sustainability); costFallback() only covers a faulted chamber with no
+  // live estimate yet (e.g. the no-LLM replay).
+  const showResolution = ch.status !== 'nominal';
+  const cost = ch.sustainability || costFallback(ch);
+  const costSub = (cost.estimable && cost.remaining_wafers)
+    ? `<div class="cost-sub">${cost.remaining_wafers} wafer${cost.remaining_wafers === 1 ? '' : 's'} at risk · est. $${Number(cost.low).toLocaleString()}–$${Number(cost.high).toLocaleString()}</div>`
+    : '';
+  const costHtml = showResolution ? `
     <div class="cost-panel ${cost.level === 'nominal' ? 'nominal' : ''}">
       <div class="cost-head">
         <span class="cost-title"><span class="cost-ico">$</span> COST OF CONTINUED RUN</span>
         <span class="cost-badge">${cost.badge}</span>
       </div>
       <div class="cost-figure">${cost.figure} <span class="cost-per">${cost.per}</span></div>
-      <div class="cost-desc">${cost.desc}</div>
-    </div>`;
+      ${costSub}
+      <div class="cost-desc">${esc(cost.desc)}</div>
+    </div>` : '';
+  const fixBtnHtml = showResolution
+    ? `<button class="fix-btn" data-fix>🔧 HOW TO FIX THIS ANOMALY</button>` : '';
   openModal(`
     <div class="modal-head">
       <span class="dot" style="background:${col};box-shadow:0 0 7px ${col};"></span>
@@ -857,7 +883,7 @@ function openDetail(key) {
       </div>
       <div class="stat-grid">${statBoxes}</div>
       ${costHtml}
-      <button class="fix-btn" data-fix>🔧 HOW TO FIX THIS ANOMALY</button>
+      ${fixBtnHtml}
       <div class="findings-label">AGENT FINDINGS</div>
       <div class="findings-scroll">${noFindings ? '<div style="font-family:var(--mono);font-size:11px;color:var(--muted);">No active findings — chamber nominal.</div>' : findings}</div>
     </div>`, 'detail');
@@ -865,72 +891,87 @@ function openDetail(key) {
   if (fixBtn) fixBtn.addEventListener('click', () => openPlaybook(key));
 }
 
-// PLACEHOLDER — replaced later by the Sustainability Agent output (ch.sustainability).
-function placeholderCost(ch) {
-  if (ch.status === 'fault')
-    return { level: 'critical', figure: '$30,800', per: '/ hr', badge: 'CRITICAL EXPOSURE',
-             desc: `Running ${ch.name} in fault risks scrapping the active lot plus unplanned downtime and rework. Yield loss compounds across queued lots for every hour of delay.` };
-  if (ch.status === 'watch')
-    return { level: 'watch', figure: '$8,400', per: '/ hr', badge: 'ELEVATED EXPOSURE',
-             desc: `${ch.name} is trending toward a control limit. Continued operation risks rework on the current lot if the drift is not corrected.` };
-  return { level: 'nominal', figure: '$0', per: '/ hr', badge: 'NO EXPOSURE',
-           desc: `${ch.name} is running within limits — no cost exposure from continued operation.` };
+// Honest "no live estimate" state for the Cost box when a chamber has no
+// Sustainability Agent output yet (nominal chamber, or the fast no-LLM replay).
+// NOT fabricated numbers — the fault case uses ch.sustainability (real).
+function costFallback(ch) {
+  if (ch.status === 'nominal')
+    return { estimable: false, level: 'nominal', figure: '$0', per: 'no exposure', badge: 'NO EXPOSURE',
+             desc: `${ch.name} is running within limits — no scrap exposure from continued operation.` };
+  return { estimable: false, level: 'nominal', figure: '—', per: '', badge: 'ESTIMATE PENDING',
+           desc: `Scrap-cost estimate is produced by the Sustainability Agent when the live pipeline is running (LIVE_AGENTS=1). No estimate on the fast replay.` };
 }
 
-// PLACEHOLDER — replaced later by the Supervisor Agent output (ch.playbook).
-function placeholderPlaybook(ch) {
-  return {
-    cause: 'Process parameter drift',
-    eta: '20–35 min',
-    steps: [
-      { title: 'Place tool in safe idle', desc: `Pause wafer handoff on ${ch.chamber || ch.name} before intervention.` },
-      { title: 'Review the trend', desc: 'Open the parameter trend and identify which signal crossed its control limit.' },
-      { title: 'Correct the deviation', desc: 'Recalibrate the affected subsystem against the recipe baseline.' },
-      { title: 'Verify & release', desc: 'Confirm the parameter holds within limits for 3 cycles, then release the lot.' },
-    ],
-    note: 'Log the corrective action in the MES once complete. If the anomaly recurs within the same shift, escalate to the maintenance lead and open a work order.',
-  };
+// RESOLUTION PLAYBOOK — REAL output of the Supervisor Agent (ch.playbook).
+// For now it surfaces EVERY role block the Supervisor emits; a later change can
+// show only the operator's covering role.
+// The position the operator picked at onboarding. Backend puts it on the feed
+// (state.shift_role); fall back to the choice saved locally during onboarding.
+function activeRole() {
+  if (state && state.shift_role) return state.shift_role;
+  try { return (JSON.parse(localStorage.getItem('fabwatch_shift_config')) || {}).role || null; }
+  catch (e) { return null; }
+}
+
+function roleCard(r) {
+  return `
+    <div class="pb-role">
+      <div class="pb-role-head"><span class="pb-role-dot"></span>${esc(r.label)}</div>
+      ${r.summary ? `<div class="pb-role-summary">${esc(r.summary)}</div>` : ''}
+      ${(r.actions && r.actions.length)
+        ? `<ol class="pb-action-list">${r.actions.map(a => `<li>${esc(a)}</li>`).join('')}</ol>`
+        : ''}
+    </div>`;
 }
 
 function openPlaybook(key) {
   const ch = state.chambers[key];
   if (!ch) return;
-  const pb = ch.playbook || placeholderPlaybook(ch);
-  const steps = pb.steps.map((s, i) => `
-    <div class="pb-step">
-      <span class="pb-num">${i + 1}</span>
-      <div class="pb-step-body">
-        <div class="pb-step-title">${s.title}</div>
-        <div class="pb-step-desc">${s.desc}</div>
-      </div>
-    </div>`).join('');
+  const pb = ch.playbook;
+  const role = activeRole();
+  let bodyHtml, sub = ch.name;
+  if (!pb || !pb.roles || !pb.roles.length) {
+    bodyHtml = `<div class="pb-note"><span class="pb-note-ico">ⓘ</span><span>No supervisor guidance available for ${ch.name}. Role-specific instructions are generated by the Supervisor Agent when the live pipeline runs (LIVE_AGENTS=1) on an active anomaly.</span></div>`;
+  } else {
+    // Show ONLY the covering role's guidance (their onboarding position). If no
+    // role is set, fall back to showing every role.
+    const shown = role ? pb.roles.filter(r => r.key === role) : pb.roles;
+    const roleLabel = (pb.roles.find(r => r.key === role) || {}).label;
+    if (role && roleLabel) sub = `${ch.name} · ${roleLabel}`;
+    const prio = String(pb.priority || '').toUpperCase();
+    const prioColor = (prio === 'CRITICAL' || prio === 'HIGH') ? 'var(--red)'
+                    : prio === 'MEDIUM' ? 'var(--yellow)' : 'var(--green)';
+    const head = `
+      <div class="pb-cause-row">
+        <div>
+          <div class="pb-label">${role && roleLabel ? esc(roleLabel.toUpperCase()) + ' · FAULT' : 'FAULT'}</div>
+          <div class="pb-cause">${esc(pb.sensor || ch.name)} · ${esc(pb.chamber || ch.chamber)}</div>
+        </div>
+        <span class="pb-eta" style="color:${prioColor};border-color:${prioColor};">${esc(prio || 'N/A')} PRIORITY</span>
+      </div>`;
+    const rolesBlock = shown.length
+      ? `<div class="pb-roles">${shown.map(roleCard).join('')}</div>`
+      : `<div class="pb-note"><span class="pb-note-ico">ⓘ</span><span>The Supervisor produced no guidance for your role (${esc(roleLabel || role)}) on this fault.</span></div>`;
+    bodyHtml = head + rolesBlock;
+  }
   openModal(`
     <div class="modal-head">
       <button class="modal-back" data-back title="Back to machine detail">←</button>
       <span class="modal-title">🔧 RESOLUTION PLAYBOOK</span>
-      <span class="modal-sub">${ch.name}</span>
+      <span class="modal-sub">${esc(sub)}</span>
       <button class="modal-x" data-close>✕</button>
     </div>
-    <div class="modal-body">
-      <div class="pb-cause-row">
-        <div>
-          <div class="pb-label">LIKELY CAUSE</div>
-          <div class="pb-cause">${pb.cause}</div>
-        </div>
-        <span class="pb-eta">Est. ${pb.eta}</span>
-      </div>
-      <div class="pb-steps">${steps}</div>
-      <div class="pb-note"><span class="pb-note-ico">ⓘ</span><span>${pb.note}</span></div>
-    </div>`, 'detail');
+    <div class="modal-body">${bodyHtml}</div>`, 'detail');
   const back = mount.querySelector('[data-back]');
   if (back) back.addEventListener('click', () => openDetail(key));   // revert to machine detail
 }
 
 /* ───────────── PIPELINE TRANSPARENCY (header) ─────────────
-   Highlights the active agent as the chain runs. PLACEHOLDER driver: sweeps
-   through the stages to show the pipeline "working". When the agents are wired
-   in, drive this from real per-agent events — call setPipelineStage(name) as
-   each agent starts, and setPipelineIdle() when the chain is done. */
+   Highlights the active agent as the chain runs. Driven by real per-agent
+   state from the live pipeline: loadData() calls setPipelineStage(name) from
+   the feed's current_stage while an event is being processed, and
+   setPipelineIdle() when no chain is running (or on the no-LLM replay path,
+   which never sets current_stage). */
 const PIPELINE_STAGES = ['production', 'quality', 'maintenance', 'sop', 'sustainability', 'supervisor'];
 function setPipelineStage(name) {
   document.querySelectorAll('.pipe-stage').forEach(el =>
@@ -939,13 +980,6 @@ function setPipelineStage(name) {
 function setPipelineIdle() {
   document.querySelectorAll('.pipe-stage').forEach(el => el.classList.remove('active'));
 }
-let _pipeIdx = 0;
-function tickPipeline() {
-  setPipelineStage(PIPELINE_STAGES[_pipeIdx % PIPELINE_STAGES.length]);
-  _pipeIdx++;
-}
-tickPipeline();
-setInterval(tickPipeline, 1100);
 
 function openPlantView() {
   const cards = (state.tools || []).map(t => {
@@ -1024,6 +1058,9 @@ async function loadData() {
       state = json;
       liveConnected = true;
       renderAll();
+      // Real pipeline state: light the running agent stage, or idle when none.
+      if (json.current_stage) setPipelineStage(json.current_stage);
+      else setPipelineIdle();
     }
   } catch (err) {
     // No JSON reachable (e.g. opened via file://) — keep showing DEMO data.
@@ -1033,8 +1070,12 @@ async function loadData() {
 
 /* ───────────── INIT ───────────── */
 renderAll();        // paint immediately with DEMO so the page is never blank
+// Entering the control room is what starts the agents/detection — not server
+// boot — so they run against the thresholds + role just set in onboarding.
+// Idempotent server-side: a refresh won't restart a run already in progress.
+fetch('/api/start', { method: 'POST' }).catch(() => {});
 loadData();         // then try to replace it with the live agent feed
-setInterval(loadData, 5000);   // auto-refresh
+setInterval(loadData, 1000);   // auto-refresh (fast enough to show live per-agent stage changes)
 </script>
 </body>
 </html>

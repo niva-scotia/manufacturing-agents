@@ -10,16 +10,20 @@ Why this script exists:
   Everything sensitive lives ABOVE the web root and is therefore unreachable.
 
 Real-time replay:
-  On startup this launches agents/simulate_realtime.py as a managed background
-  process, so every time you start the server the dashboard RESETS to the 06:02
-  simulated start (empty board) and then fills in live as the day replays. The
-  replay is stopped automatically when you Ctrl+C the server.
+  The detection/agent run does NOT start at server boot. It starts when the
+  operator reaches the control room — fabwatch_dashboard.html calls POST
+  /api/start on load, i.e. AFTER onboarding has set thresholds + role. So the
+  run always reflects the operator's just-saved values. LIVE_AGENTS=1 runs the
+  real 6-agent chain (agents/run_live_pipeline.py); otherwise the fast no-LLM
+  replay (agents/simulate_realtime.py). Stopped automatically on Ctrl+C, and
+  restarted on the next entry when new onboarding values are saved.
 
 Usage:
-    python serve_dashboard.py            # http://localhost:8777/fabwatch_dashboard.html
+    python serve_dashboard.py            # http://localhost:8777/  → onboarding → control room
+    LIVE_AGENTS=1 python serve_dashboard.py  # real agent chain (LLM + RAG)
     PORT=9000 python serve_dashboard.py  # custom port
-    SPEED=60 python serve_dashboard.py   # fast-forward the replay (see simulate_realtime.py)
-    AUTO_REPLAY=0 python serve_dashboard.py  # serve only; don't auto-start the replay
+    SPEED=60 python serve_dashboard.py   # fast-forward pacing
+    AUTO_REPLAY=0 python serve_dashboard.py  # serve only; never start agents
 """
 import atexit
 import functools
@@ -30,15 +34,64 @@ import signal
 import socketserver
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
 REPO_ROOT   = Path(__file__).parent                         # holds shift_config.json (NOT served)
 WEB_ROOT    = REPO_ROOT / "front_end"                       # the ONLY folder exposed
 SIM_SCRIPT  = REPO_ROOT / "agents" / "simulate_realtime.py"
+LIVE_SCRIPT = REPO_ROOT / "agents" / "run_live_pipeline.py"   # LIVE_AGENTS=1 → real 6-agent chain
 SHIFT_CONFIG = REPO_ROOT / "shift_config.json"              # written by the pre-shift onboarding screen
 PORT        = int(os.environ.get("PORT", "8777"))
 HOST        = "127.0.0.1"                                    # localhost only — not the LAN
-AUTO_REPLAY = os.environ.get("AUTO_REPLAY", "1") != "0"     # start the replay on launch
+AUTO_REPLAY = os.environ.get("AUTO_REPLAY", "1") != "0"     # allow the dashboard to start agents
+
+# ── Managed replay/agent process ──────────────────────────────────────────────
+# The detection/agent run is NO LONGER started at server boot. It starts only
+# when the operator reaches the control room (fabwatch_dashboard.html calls
+# POST /api/start on load) — i.e. AFTER onboarding has set thresholds + role.
+_replay_proc = None
+_replay_lock = threading.Lock()
+
+
+def _replay_alive():
+    return _replay_proc is not None and _replay_proc.poll() is None
+
+
+def start_agents():
+    """Launch the replay/agent process if not already running. Idempotent, so a
+    dashboard refresh won't reset a run in progress. Picks the LIVE 6-agent chain
+    when LIVE_AGENTS=1, else the fast no-LLM replay. Reads shift_config.json, so
+    the operator's just-saved onboarding thresholds/role take effect."""
+    global _replay_proc
+    with _replay_lock:
+        if not AUTO_REPLAY:
+            return {"ok": False, "status": "disabled"}
+        if _replay_alive():
+            return {"ok": True, "status": "already_running", "pid": _replay_proc.pid}
+        live   = os.environ.get("LIVE_AGENTS") == "1"
+        script = LIVE_SCRIPT if live else SIM_SCRIPT
+        if not script.exists():
+            return {"ok": False, "status": "missing", "detail": str(script)}
+        _replay_proc = subprocess.Popen([sys.executable, str(script)], env=os.environ.copy())
+        mode = "LIVE AGENTS (real chain)" if live else "no-LLM replay"
+        print(f"  [agents] started {mode} (PID {_replay_proc.pid}) — operator entered the control room.")
+        return {"ok": True, "status": "started", "pid": _replay_proc.pid, "mode": mode}
+
+
+def stop_agents():
+    """Terminate the replay/agent process if running (never outlives the server;
+    also called on new onboarding so the next entry starts fresh)."""
+    global _replay_proc
+    with _replay_lock:
+        if _replay_alive():
+            _replay_proc.terminate()
+            try:
+                _replay_proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                _replay_proc.kill()
+        _replay_proc = None
+
 
 # Contract shared with front_end/onboarding.html and agents/production_agent.py.
 ALLOWED_SENSORS = {"tcp_top_pwr", "bcl3_flow", "cl2_flow", "pressure", "rf_btm_pwr"}
@@ -109,52 +162,43 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self):
-        # The one and only write endpoint: persist the pre-shift setup so the
-        # agent chain reads the operator's thresholds instead of hard-coded ones.
-        if self.path.split("?", 1)[0] != "/api/shift-config":
-            self._send_json(404, {"ok": False, "error": "not found"})
+        path = self.path.split("?", 1)[0]
+
+        # Started by fabwatch_dashboard.html on load — i.e. once the operator has
+        # finished onboarding and entered the control room. This (not server boot)
+        # is what kicks off detection/the agent chain.
+        if path == "/api/start":
+            self._send_json(200, start_agents())
             return
-        try:
-            length  = int(self.headers.get("Content-Length", 0))
-            raw     = self.rfile.read(length) if length else b"{}"
-            payload = json.loads(raw.decode("utf-8"))
-            clean   = sanitize_shift_config(payload)
-        except (ValueError, json.JSONDecodeError) as e:
-            self._send_json(400, {"ok": False, "error": str(e)})
+
+        # The pre-shift setup writer: persist the operator's thresholds + role, and
+        # stop any in-flight run so the NEXT control-room entry starts fresh on the
+        # new values.
+        if path == "/api/shift-config":
+            try:
+                length  = int(self.headers.get("Content-Length", 0))
+                raw     = self.rfile.read(length) if length else b"{}"
+                payload = json.loads(raw.decode("utf-8"))
+                clean   = sanitize_shift_config(payload)
+            except (ValueError, json.JSONDecodeError) as e:
+                self._send_json(400, {"ok": False, "error": str(e)})
+                return
+            try:
+                SHIFT_CONFIG.write_text(json.dumps(clean, indent=2))
+            except OSError as e:
+                self._send_json(500, {"ok": False, "error": str(e)})
+                return
+            stop_agents()   # new config → drop the old run; dashboard entry restarts it
+            print(f"  [shift-config] saved role={clean['role']} "
+                  f"thresholds={len(clean['thresholds'])} → {SHIFT_CONFIG.name}")
+            self._send_json(200, {"ok": True, "file": SHIFT_CONFIG.name})
             return
-        try:
-            SHIFT_CONFIG.write_text(json.dumps(clean, indent=2))
-        except OSError as e:
-            self._send_json(500, {"ok": False, "error": str(e)})
-            return
-        print(f"  [shift-config] saved role={clean['role']} "
-              f"thresholds={len(clean['thresholds'])} → {SHIFT_CONFIG.name}")
-        self._send_json(200, {"ok": True, "file": SHIFT_CONFIG.name})
+
+        self._send_json(404, {"ok": False, "error": "not found"})
 
 
 class Server(socketserver.TCPServer):
     allow_reuse_address = True   # avoid "Address already in use" on lingering sockets
-
-
-def start_replay():
-    """
-    Launch the real-time replay in the background so the board resets to the
-    06:02 start and fills in live every time the server starts.
-
-    Uses THIS interpreter (so it picks up the same env's dependencies) and
-    inherits the environment, so SPEED / START / TICK / LOOP still work.
-    Returns the Popen, or None if disabled/unavailable.
-    """
-    if not AUTO_REPLAY:
-        print("  Replay:      disabled (AUTO_REPLAY=0) — run simulate_realtime.py yourself.")
-        return None
-    if not SIM_SCRIPT.exists():
-        print(f"  Replay:      [warn] {SIM_SCRIPT} not found — serving existing data as-is.")
-        return None
-    proc = subprocess.Popen([sys.executable, str(SIM_SCRIPT)], env=os.environ.copy())
-    print(f"  Replay:      started (PID {proc.pid}) — board resets to 06:02 and fills in live.")
-    print(f"               (SPEED/START/TICK env vars tune it; AUTO_REPLAY=0 disables.)")
-    return proc
 
 
 def main():
@@ -181,19 +225,14 @@ def main():
         print(f"  Control room:http://localhost:{port}/fabwatch_dashboard.html")
         print(f"  Serving ONLY: {WEB_ROOT}")
         print("  (.env, data/, agents/, chroma_db/ are NOT exposed)")
-        sim = start_replay()
+        if AUTO_REPLAY:
+            print("  Agents:      start when the operator ENTERS the control room")
+            print("               (after onboarding sets thresholds + role) — not at boot.")
+        else:
+            print("  Agents:      disabled (AUTO_REPLAY=0) — serving existing data as-is.")
 
-        def stop_sim():
-            # Stop the background replay so it never outlives the server.
-            if sim and sim.poll() is None:
-                sim.terminate()
-                try:
-                    sim.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    sim.kill()
-
-        # Backstop: run cleanup on any interpreter exit.
-        atexit.register(stop_sim)
+        # Backstop: never let the agent process outlive the server.
+        atexit.register(stop_agents)
 
         # Make BOTH Ctrl+C (SIGINT) and `kill` (SIGTERM) shut down cleanly.
         # Setting SIGINT explicitly also covers the case where the process was
@@ -210,7 +249,7 @@ def main():
         except KeyboardInterrupt:
             print("\nStopped.")
         finally:
-            stop_sim()
+            stop_agents()
 
 
 if __name__ == "__main__":

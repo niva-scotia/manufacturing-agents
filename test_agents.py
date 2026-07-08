@@ -85,6 +85,7 @@ def _load_production_module():
         "maintenance_client = None\n"
         "sop_store      = None\n"
         "sop_client     = None\n"
+        "supervisor_client = None\n" 
         "def event_time(wafer_id):\n"
         "    return '00:00:00'\n"
         "def get_llm_explanation(event_type, sensor, details):\n"
@@ -101,6 +102,9 @@ def _load_production_module():
         "    return None\n"
         "def run_impact_agent(alert, quality_report=None, recommendation=None, sop_report=None, roster=None, client=None, price_provider=None):\n"
         "    return {'narrative': '[mocked impact]', 'estimable': False}\n"
+        "def run_supervisor_agent(alert, quality_report, recommendation, sop_report, sustainability_report=None, client=None, roster=None, price_provider=None):\n"
+        "    return {'priority': 'LOW', 'sensor': '', 'chamber_id': '', 'alert_type': '', 'sustainability': {}}\n"
+        "def print_supervisor_summary(rec): pass\n"
         + src[start:stop]
     )
 
