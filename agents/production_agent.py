@@ -883,10 +883,10 @@ if trends:
         'rate_per_step', 'r_squared', 'time_to_breach'
     ]].to_string(index=False))
 
-# ## Cell 11 — Export data for the FABWATCH dashboard
+# ## Cell 11 — Export data for the OI Argus dashboard
 # Maps this run's anomalies + trends (with LLM explanations) and the chamber
 # summary into front_end/dashboard_data.json. The dashboard
-# (front_end/fabwatch_dashboard.html) fetches this file and auto-refreshes,
+# (front_end/oiargus.html) fetches this file and auto-refreshes,
 # so the UI reflects the agent's real findings.
 try:
     from dashboard_export import (

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>FABWATCH — FAB 2 · PHOENIX</title>
+<title>OI Argus Dashboard</title>
 <style>
   :root {
     --bg:        #05080f;
@@ -42,7 +42,7 @@
     display: flex; align-items: center; gap: 16px; padding: 0 18px; height: 56px;
     flex-shrink: 0; border-bottom: 1px solid var(--border); background: rgba(8,12,22,0.6);
   }
-  .logo-block { display: flex; align-items: center; gap: 11px; }
+  .logo-block { display: flex; align-items: center; margin-left: 8px; }
   .logo-mark { display: flex; align-items: center; flex-shrink: 0; color: var(--text); }
   .logo-name { font-weight: 700; font-size: 16px; letter-spacing: 1px; }
   .logo-sub { font-family: var(--mono); font-size: 9.5px; color: var(--muted); letter-spacing: 1.5px; margin-top: 1px; }
@@ -368,12 +368,7 @@
 <div class="header">
   <div class="logo-block">
     <span class="logo-mark">
-      <svg width="30" height="30" viewBox="0 0 40 40" fill="none" aria-hidden="true">
-        <circle cx="14.5" cy="20" r="9" stroke="currentColor" stroke-width="6"/>
-        <rect x="24.5" y="7" width="6" height="26" rx="3" fill="currentColor" transform="rotate(20 27.5 20)"/>
-      </svg>
-    </span>
-    <span class="logo-name">ARGUS</span>
+      <img src="OIArgus.svg" alt="Logo" />
   </div>
   <div class="pipeline" id="pipeline">
     <span class="pipe-label">AGENTS</span>
@@ -1069,13 +1064,28 @@ async function loadData() {
 }
 
 /* ───────────── INIT ───────────── */
-renderAll();        // paint immediately with DEMO so the page is never blank
-// Entering the control room is what starts the agents/detection — not server
-// boot — so they run against the thresholds + role just set in onboarding.
-// Idempotent server-side: a refresh won't restart a run already in progress.
-fetch('/api/start', { method: 'POST' }).catch(() => {});
-loadData();         // then try to replace it with the live agent feed
-setInterval(loadData, 1000);   // auto-refresh (fast enough to show live per-agent stage changes)
+// Paint a CLEAN board on entry — never flash demo/stale anomalies. Detection
+// hasn't started yet (it starts on entry, below), so the control room must open
+// empty and then fill in live.
+state = JSON.parse(JSON.stringify(DEMO));
+state.errors = []; state.trends = []; state.critical = null;
+Object.values(state.chambers || {}).forEach(c => {
+  c.status = 'nominal'; c.findings = [];
+  (c.sensors || []).forEach(s => s.status = 'ok');
+  c.modules = (c.modules || []).map(() => 'green');   // chamber-diagram boxes all nominal
+});
+renderAll();
+setPipelineIdle();
+
+// Entering the control room is what starts detection/the agent chain — only now,
+// after onboarding set thresholds + role (never at server boot). Await /api/start
+// so the server has wiped any stale feed BEFORE we begin polling; then fill in
+// live. Idempotent server-side, so a refresh won't restart a run in progress.
+(async () => {
+  try { await fetch('/api/start', { method: 'POST' }); } catch (e) {}
+  loadData();
+  setInterval(loadData, 1000);   // auto-refresh (fast enough to show live per-agent stages)
+})();
 </script>
 </body>
 </html>

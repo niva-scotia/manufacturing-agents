@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Serve the FABWATCH dashboard — and ONLY the front_end/ folder.
+Serve the OI Argus dashboard — and ONLY the front_end/ folder.
 
 Why this script exists:
   `python3 -m http.server` serves the directory you launch it from, recursively.
@@ -11,7 +11,7 @@ Why this script exists:
 
 Real-time replay:
   The detection/agent run does NOT start at server boot. It starts when the
-  operator reaches the control room — fabwatch_dashboard.html calls POST
+  operator reaches the control room — oiargus.html calls POST
   /api/start on load, i.e. AFTER onboarding has set thresholds + role. So the
   run always reflects the operator's just-saved values. LIVE_AGENTS=1 runs the
   real 6-agent chain (agents/run_live_pipeline.py); otherwise the fast no-LLM
@@ -48,7 +48,7 @@ AUTO_REPLAY = os.environ.get("AUTO_REPLAY", "1") != "0"     # allow the dashboar
 
 # ── Managed replay/agent process ──────────────────────────────────────────────
 # The detection/agent run is NO LONGER started at server boot. It starts only
-# when the operator reaches the control room (fabwatch_dashboard.html calls
+# when the operator reaches the control room (oiargus.html calls
 # POST /api/start on load) — i.e. AFTER onboarding has set thresholds + role.
 _replay_proc = None
 _replay_lock = threading.Lock()
@@ -56,6 +56,34 @@ _replay_lock = threading.Lock()
 
 def _replay_alive():
     return _replay_proc is not None and _replay_proc.poll() is None
+
+
+def write_blank_feed():
+    """Reset dashboard_data.json to an EMPTY board *synchronously*, right now.
+
+    The agent process takes several seconds to boot (imports + ChromaDB indexes)
+    before it writes its own blank board. Without this, the dashboard's first
+    poll on entry reads the PREVIOUS run's leftover feed and briefly shows stale
+    anomalies until the new run resets it. Blanking here — before the subprocess
+    even starts — means the board is already empty the instant the operator
+    arrives, then fills in live. Reuses build_payload so the shape never drifts.
+    """
+    try:
+        agents_dir = str(REPO_ROOT / "agents")
+        if agents_dir not in sys.path:
+            sys.path.insert(0, agents_dir)
+        import pandas as pd
+        from dashboard_export import build_payload, write_dashboard_json, resolve_thresholds
+        # header-only frames → valid empty board without loading the full CSVs
+        m = pd.read_csv(REPO_ROOT / "data" / "train_machine.csv", nrows=0)
+        m.columns = [c.strip().lower().replace(" ", "_") for c in m.columns]
+        s = pd.read_csv(REPO_ROOT / "data" / "train_summary.csv", nrows=0)
+        blank = build_payload([], [], m, s, resolve_thresholds())
+        blank["generated_at"] = blank["sim_clock"] = "--:--:--"
+        blank["current_stage"] = "production"   # detection agent is coming online
+        write_dashboard_json(blank, verbose=False)
+    except Exception as e:
+        print(f"  [agents] blank-feed skipped ({e})")
 
 
 def start_agents():
@@ -73,6 +101,9 @@ def start_agents():
         script = LIVE_SCRIPT if live else SIM_SCRIPT
         if not script.exists():
             return {"ok": False, "status": "missing", "detail": str(script)}
+        # Wipe any stale feed BEFORE the (slow-to-boot) run starts, so the board
+        # is empty the moment the operator enters — no leftover anomalies.
+        write_blank_feed()
         _replay_proc = subprocess.Popen([sys.executable, str(script)], env=os.environ.copy())
         mode = "LIVE AGENTS (real chain)" if live else "no-LLM replay"
         print(f"  [agents] started {mode} (PID {_replay_proc.pid}) — operator entered the control room.")
@@ -145,7 +176,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         # The pre-shift onboarding screen is the front door: hitting the site
         # root sends the operator to set thresholds + role first. From there the
-        # "Enter Control Room" button links on to fabwatch_dashboard.html.
+        # "Enter Control Room" button links on to oiargus.html.
         if self.path.split("?", 1)[0] in ("/", "/index.html"):
             self.send_response(302)
             self.send_header("Location", "/onboarding.html")
@@ -164,7 +195,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def do_POST(self):
         path = self.path.split("?", 1)[0]
 
-        # Started by fabwatch_dashboard.html on load — i.e. once the operator has
+        # Started by oiargus.html on load — i.e. once the operator has
         # finished onboarding and entered the control room. This (not server boot)
         # is what kicks off detection/the agent chain.
         if path == "/api/start":
@@ -220,9 +251,9 @@ def main():
 
     with httpd:
         print("─" * 60)
-        print("FABWATCH dashboard")
+        print("OI Argus dashboard")
         print(f"  Open:        http://localhost:{port}/   (→ pre-shift setup, then the control room)")
-        print(f"  Control room:http://localhost:{port}/fabwatch_dashboard.html")
+        print(f"  Control room:http://localhost:{port}/oiargus.html")
         print(f"  Serving ONLY: {WEB_ROOT}")
         print("  (.env, data/, agents/, chroma_db/ are NOT exposed)")
         if AUTO_REPLAY:

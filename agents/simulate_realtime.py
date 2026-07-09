@@ -120,7 +120,7 @@ def main():
 
     print(f"[sim] {len(anoms)} anomalies, {len(trends)} trends | "
           f"day window {_fmt(start)}–{_fmt(last)} | SPEED={speed}x  TICK={tick}s")
-    print("[sim] open http://localhost:8777/fabwatch_dashboard.html and watch it fill in.")
+    print("[sim] open http://localhost:8777/oiargus.html and watch it fill in.")
 
     while True:
         wall0 = time.time()

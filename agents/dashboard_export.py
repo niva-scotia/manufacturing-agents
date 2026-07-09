@@ -1,5 +1,5 @@
 # # Dashboard Export
-# Builds the JSON payload that backs front_end/fabwatch_dashboard.html.
+# Builds the JSON payload that backs front_end/oiargus.html.
 #
 # Two entry points:
 #   1. build_payload(anomaly_log, trend_log, machine_df, summary_df, thresholds)
