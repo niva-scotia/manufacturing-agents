@@ -284,7 +284,7 @@
   .cost-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
   .cost-title { font-family: var(--mono); font-size: 11px; font-weight: 700; letter-spacing: 1.6px; color: var(--red); display: flex; align-items: center; gap: 9px; }
   .cost-panel.nominal .cost-title { color: var(--green); }
-  .cost-ico { display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 17px; border-radius: 50%; border: 1px solid currentColor; font-size: 9px; font-weight: 700; }
+  .cost-ico { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; border: 1px solid currentColor; font-size: 9px; font-weight: 700; }
   .cost-badge { font-family: var(--mono); font-size: 9px; font-weight: 700; letter-spacing: 1.4px; color: var(--red); border: 1px solid rgba(248,113,113,0.5); border-radius: 7px; padding: 5px 10px; white-space: nowrap; }
   .cost-panel.nominal .cost-badge { color: var(--green); border-color: rgba(52,211,153,0.5); }
   .cost-figure { font-family: var(--mono); font-size: 28px; font-weight: 700; color: var(--red); letter-spacing: 0.5px; margin-bottom: 7px; }
@@ -855,7 +855,7 @@ function openDetail(key) {
       <div class="cost-desc">${esc(cost.desc)}</div>
     </div>` : '';
   const fixBtnHtml = showResolution
-    ? `<button class="fix-btn" data-fix>🔧 HOW TO FIX THIS ANOMALY</button>` : '';
+    ? `<button class="fix-btn" data-fix>HOW TO FIX THIS ANOMALY</button>` : '';
   openModal(`
     <div class="modal-head">
       <span class="dot" style="background:${col};box-shadow:0 0 7px ${col};"></span>
