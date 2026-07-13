@@ -9,7 +9,7 @@
 # - **Trend detection** — flags sensors on a sustained trajectory toward a breach
 # 
 
-# ## Cell 1 — Install dependencies
+# Install dependencies
 
 import sys, subprocess
 from pathlib import Path as _Path
@@ -142,7 +142,7 @@ supervisor_client = AzureOpenAI(
 )
 print("Supervisor Agent ready.")
 
-# ## Cell 4 — Load and prepare data
+# Load and prepare data
 
 DATA_PATH = str(_ROOT / "data/train_machine.csv")
 
@@ -628,7 +628,7 @@ def run_agent(data, thresholds, trend_config, max_rows=None):
                     "explanation"   : explanation,
                 }
                 anomaly_log.append(anomaly)
-
+                
                 print(f"\n{'🚨' * 3}  ANOMALY — VALUE OUT OF RANGE  {'🚨' * 3}")
                 print(f"  Time      : {anomaly['timestamp']}")
                 print(f"  Wafer     : {wafer_id}")

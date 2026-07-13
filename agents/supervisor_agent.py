@@ -21,7 +21,8 @@ Inputs / outputs:
            for a web app UI or console printer to render directly.
 """
 
-import os
+# import required modules and libraries
+import os 
 import re
 import json
 from openai import AzureOpenAI
@@ -131,7 +132,7 @@ SYSTEM_PROMPT = """
 You are the Human-in-the-Loop Supervisor Agent for a semiconductor fab's
 manufacturing copilot. You are the last stage in a chain of specialized agents:
 Production (fault detection) -> Quality (historical NCRs) -> Maintenance (CMMS
-facts + recommendation) -> SOP (relevant procedures) -> you.
+facts + recommendation) -> SOP (relevant procedures) -> Sustainability (scrap cost estimates) -> you.
 
 Your job is NOT to detect faults, invent facts, or verify anything — every
 prior agent already did that. Your job is to translate the accumulated,
