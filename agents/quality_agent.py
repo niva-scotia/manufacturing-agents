@@ -23,7 +23,7 @@ from dotenv import load_dotenv
 from pathlib import Path
 from chromadb.api.types import EmbeddingFunction
 
-# Load .env
+# Load the .env file
 _ROOT = Path(__file__).parent.parent
 load_dotenv(_ROOT / ".env")
 
