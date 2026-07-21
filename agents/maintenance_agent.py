@@ -51,6 +51,11 @@ CHROMA_DB_PATH   = str(_ROOT / "chroma_db")
 COLLECTION_NAME  = "cmms_work_orders"    # but a SEPARATE collection
 EMBEDDING_MODEL  = "text-embedding-3-small"
 TOP_K            = 5
+# Cosine-similarity floor for retrieved work orders. Calibrated against real
+# scores: genuine matches land ~0.65–0.75, unrelated noise ~0.11–0.15, so 0.35
+# keeps real history and drops noise. Below this, retrieval is treated as "no
+# relevant prior work orders" rather than fed to the LLM.
+MIN_SIMILARITY   = 0.35
 OPENAI_MODEL     = os.getenv("AZURE_DEPLOYMENT")
 
 # Maps a Production Agent sensor name to the CMMS component category.
@@ -372,23 +377,38 @@ def build_wo_query(parsed: dict,
 
 def retrieve_work_orders(collection: chromadb.Collection,
                          query: str,
+                         chamber: str = None,
                          top_k: int = TOP_K) -> list[dict]:
     """
     Queries ChromaDB for the top_k most semantically similar work orders.
-    Same structure as the Quality Agent's retrieve_cases().
+
+    When `chamber` is given, retrieval is restricted to that chamber's work
+    orders (metadata filter) so a fault on one chamber never borrows another
+    chamber's repair history. Results below MIN_SIMILARITY are dropped, so an
+    empty list means "no relevant prior work orders for this chamber".
     """
-    results = collection.query(
-        query_texts=[query],
-        n_results=top_k,
-        include=["documents", "distances"]
-    )
+    kwargs = {
+        "query_texts": [query],
+        "n_results":   top_k,
+        "include":     ["documents", "distances"],
+    }
+    if chamber and chamber != "UNKNOWN":
+        kwargs["where"] = {"chamber_id": chamber}
+
+    results = collection.query(**kwargs)
+
+    docs      = results["documents"][0] if results.get("documents") else []
+    distances = results["distances"][0] if results.get("distances") else []
 
     wos = []
-    for i in range(len(results["documents"][0])):
+    for i in range(len(docs)):
+        similarity = round(1 - distances[i], 4)
+        if similarity < MIN_SIMILARITY:        # drop weak / irrelevant matches
+            continue
         wos.append({
-            "rank":       i + 1,
-            "similarity": round(1 - results["distances"][0][i], 4),
-            "content":    results["documents"][0][i],
+            "rank":       len(wos) + 1,
+            "similarity": similarity,
+            "content":    docs[i],
         })
 
     return wos
@@ -406,7 +426,7 @@ You receive (the accumulated outputs of every prior agent in the chain):
   2. A Quality Agent report — sensor, chamber, NCR summary, tool wear indicators,
      recurrence.
   3. CMMS FACTS that have ALREADY been computed deterministically before you were
-     called: PM status, spare-parts availability, calibration status, and the
+     called: PM  , spare-parts availability, calibration status, and the
      final priority.
   4. Retrieved historical work orders — the most relevant past WOs, found by
      semantic similarity to the full upstream picture.
@@ -468,7 +488,9 @@ def synthesise_recommendation(parsed: dict,
         f"RETRIEVED WORK ORDER {w['rank']} "
         f"(similarity: {w['similarity']}):\n\n{w['content']}"
         for w in retrieved_wos
-    ])
+    ]) or ("No prior work orders on record for this chamber. Do NOT infer past "
+           "patterns or borrow another chamber's history — base the recommendation "
+           "only on the CMMS facts above and state that no prior WOs were found.")
 
     parts_lines = "\n".join([
         f"  - {p['part_number']} ({p['description']}): {p['status']}, "
@@ -625,9 +647,17 @@ def run_maintenance_agent(alert: dict,
     # picture (Production deviation + Quality NCR/recurrence signals), not just
     # this agent's immediate input.
     query     = build_wo_query(parsed, alert, quality_report)
-    retrieved = retrieve_work_orders(wo_collection, query, top_k=TOP_K)
-    print(f"[Maintenance Agent] Retrieved {len(retrieved)} work orders. "
-          f"Best similarity: {retrieved[0]['similarity']:.4f}")
+    retrieved = retrieve_work_orders(wo_collection, query,
+                                     chamber=parsed["chamber_id"], top_k=TOP_K)
+    if retrieved:
+        print(f"[Maintenance Agent] Retrieved {len(retrieved)} work orders for "
+              f"{parsed['chamber_id']} (floor {MIN_SIMILARITY}):")
+        for w in retrieved:
+            head = w["content"].splitlines()[0][:70]
+            print(f"    similarity = {w['similarity']:.4f}  |  {head}")
+    else:
+        print(f"[Maintenance Agent] No prior work orders on record for "
+              f"{parsed['chamber_id']}.")
 
     # LLM synthesis
     return synthesise_recommendation(

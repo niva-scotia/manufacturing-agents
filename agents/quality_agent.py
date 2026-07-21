@@ -34,6 +34,9 @@ CHROMA_DB_PATH       = str(_ROOT / "chroma_db")
 COLLECTION_NAME      = "quality_records"   # name of the collection inside ChromaDB
 EMBEDDING_MODEL      = "text-embedding-3-small" # HuggingFace model for embeddings
 TOP_K                = 5
+# Cosine-similarity floor: genuine matches ~0.65+, noise ~0.15, so 0.35 keeps
+# real records and drops irrelevant ones. Empty result => no relevant history.
+MIN_SIMILARITY       = 0.35
 OPENAI_MODEL         = os.getenv("AZURE_DEPLOYMENT")
 
 class OpenAIEmbedder(EmbeddingFunction):
@@ -142,14 +145,19 @@ def retrieve_cases(collection: chromadb.Collection,
         include=["documents", "distances"]
     )
 
+    docs      = results["documents"][0] if results.get("documents") else []
+    distances = results["distances"][0] if results.get("distances") else []
+
     cases = []
-    for i in range(len(results["documents"][0])):
+    for i in range(len(docs)):
+        # ChromaDB returns distance (lower = more similar); convert to similarity.
+        similarity = round(1 - distances[i], 4)
+        if similarity < MIN_SIMILARITY:        # drop weak / irrelevant matches
+            continue
         cases.append({
-            "rank":       i + 1,
-            # ChromaDB returns distance (lower = more similar).
-            # Convert to similarity score (higher = more similar).
-            "similarity": round(1 - results["distances"][0][i], 4),
-            "content":    results["documents"][0][i],
+            "rank":       len(cases) + 1,
+            "similarity": similarity,
+            "content":    docs[i],
         })
 
     return cases
@@ -211,7 +219,9 @@ def synthesise_report(alert: dict,
         f"RETRIEVED CASE {c['rank']} "
         f"(similarity: {c['similarity']}):\n\n{c['content']}"
         for c in retrieved
-    ])
+    ]) or ("No sufficiently relevant quality records were found for this fault. "
+           "Do NOT invent NCRs, defects, or history — report that no matching "
+           "records exist and base the summary only on the alert.")
 
     chamber = alert.get("chamber_id") or alert.get("chamber", "unknown")
     atype   = alert.get("alert_type", "ANOMALY")
@@ -274,8 +284,17 @@ def run_quality_agent(alert: dict,
     query     = build_query(alert)
     retrieved = retrieve_cases(collection, query, top_k=TOP_K)
 
-    print(f"[Quality Agent] Retrieved {len(retrieved)} cases. "
-          f"Best similarity: {retrieved[0]['similarity']:.4f}")
+    if retrieved:
+        print(f"[Quality Agent] Retrieved {len(retrieved)} cases "
+              f"(floor {MIN_SIMILARITY}):")
+        for c in retrieved:
+            # Skip the generic "NCR REPORT:" header; use the NCR line that
+            # carries wafer/lot/chamber so each row is distinguishable.
+            lines = [l for l in c["content"].splitlines() if l.strip()]
+            head = (lines[1] if len(lines) > 1 else lines[0])[:70]
+            print(f"    similarity = {c['similarity']:.4f}  |  {head}")
+    else:
+        print("[Quality Agent] No sufficiently relevant quality records found.")
 
     # Add this block to see the retrieved cases
     #print("\n[Quality Agent] Top 5 retrieved cases:")

@@ -42,6 +42,9 @@ CHROMA_DB_PATH  = str(_ROOT / "chroma_db")
 COLLECTION_NAME = "sop_knowledge_base"
 EMBEDDING_MODEL = "text-embedding-3-small"
 TOP_K           = 5
+# Cosine-similarity floor: genuine matches ~0.65+, noise ~0.15, so 0.35 keeps
+# real KB entries and drops irrelevant ones. Empty result => nothing relevant.
+MIN_SIMILARITY  = 0.35
 OPENAI_MODEL    = os.getenv("AZURE_DEPLOYMENT")
 
 TOTAL_EXPECTED_DOCS = 54  # 15 SOPs + 12 guides + 12 incidents + 15 manuals
@@ -268,13 +271,20 @@ def retrieve_cases(collection: chromadb.Collection,
         include     = ["documents", "distances", "metadatas"]
     )
 
+    docs      = results["documents"][0] if results.get("documents") else []
+    distances = results["distances"][0] if results.get("distances") else []
+    metas     = results["metadatas"][0] if results.get("metadatas") else []
+
     cases = []
-    for i in range(len(results["documents"][0])):
-        meta = results["metadatas"][0][i] if results["metadatas"] else {}
+    for i in range(len(docs)):
+        similarity = round(1 - distances[i], 4)
+        if similarity < MIN_SIMILARITY:        # drop weak / irrelevant matches
+            continue
+        meta = metas[i] if i < len(metas) and metas[i] else {}
         cases.append({
-            "rank":       i + 1,
-            "similarity": round(1 - results["distances"][0][i], 4),
-            "content":    results["documents"][0][i],
+            "rank":       len(cases) + 1,
+            "similarity": similarity,
+            "content":    docs[i],
             "source":     meta.get("source", "unknown"),
             "id":         meta.get("id", ""),
         })
@@ -353,7 +363,9 @@ def synthesise_report(alert: dict,
         f"[SOURCE TYPE: {SOURCE_LABELS.get(c['source'], c['source'])} | "
         f"DOCUMENT ID: {c['id']} | similarity: {c['similarity']}]:\n\n{c['content']}"
         for c in retrieved
-    ])
+    ]) or ("No sufficiently relevant knowledge-base documents were found for this "
+           "fault. Report that no matching SOPs/guides/manuals/incidents exist. "
+           "Do NOT cite or invent any document that is not listed above.")
 
     chamber  = alert.get("chamber_id") or alert.get("chamber", "unknown")
     atype    = alert.get("alert_type", "ANOMALY")
@@ -432,8 +444,14 @@ def run_sop_agent(alert: dict,
     query     = build_query(alert, quality_report, recommendation)
     retrieved = retrieve_cases(collection, query, top_k=TOP_K)
 
-    print(f"[SOP Agent] Retrieved {len(retrieved)} documents. "
-          f"Best similarity: {retrieved[0]['similarity']:.4f}")
+    if retrieved:
+        print(f"[SOP Agent] Retrieved {len(retrieved)} documents "
+              f"(floor {MIN_SIMILARITY}):")
+        for c in retrieved:
+            label = f"{c.get('source','?')} {c.get('id','')}".strip()
+            print(f"    similarity = {c['similarity']:.4f}  |  {label}")
+    else:
+        print("[SOP Agent] No sufficiently relevant knowledge-base entries found.")
 
     return synthesise_report(alert, quality_report, recommendation, retrieved, client)
 

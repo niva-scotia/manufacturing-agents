@@ -2,7 +2,7 @@
 Human-in-the-Loop Supervisor Agent
 ===================================
 Pipeline position:
-  Production Agent → Quality Agent → Maintenance Agent → SOP Agent → [THIS AGENT]
+  Production Agent → Quality Agent → Maintenance Agent → SOP Agent → Sustainability Agent → [THIS AGENT]
 
 Design philosophy (mirrors the other agents):
   This agent does not detect faults, retrieve records, or check facts itself —
@@ -165,10 +165,53 @@ Rules:
     or calibration facts.
   - Every action must be short, imperative, and specific (reference an actual
     sensor, chamber, SOP ID, part number, or CMMS fact given to you).
+  - TECHNICAL SPECIFICITY (critical): the reader is a trained technician and
+    already knows the obvious generic responses. Do NOT fill the list with
+    generic, self-evident advice such as "stop the line", "isolate the chamber",
+    "notify maintenance", "monitor the situation", "follow safety procedures",
+    or "quarantine the lot" UNLESS you attach the specific technical detail that
+    makes it actionable. Instead, tell them the concrete technical fix drawn from
+    the upstream agents' data, for example:
+      * the exact SOP/troubleshooting procedure to run — cite its ID/title and
+        the specific step(s) from the SOP Agent report (e.g. "Run SOP-TCP-014
+        step 3: reseat the TCP match network and re-strike plasma");
+      * the specific part to replace and its status/location from the Maintenance
+        Agent (e.g. "Replace TCP match capacitor PN-4471 — in stock, loc A-12");
+      * the specific PM/calibration task that is due or overdue (e.g. "Perform
+        wet clean — overdue by 320 wafers", "Recalibrate TCP generator — cal
+        overdue, next-due date passed");
+      * the specific fix that resolved this fault in the retrieved past work
+        orders (from PAST WORK-ORDER PATTERNS);
+      * concrete inspection targets tied to the component (e.g. "Inspect TCP
+        generator output stage and RF strap for arcing"), not "inspect the tool".
+    If a generic containment step (stop line / isolate chamber / quarantine lot)
+    is genuinely warranted by the priority, keep AT MOST one such step and spend
+    the remaining actions on the specific technical fixes above.
+  - Base every technical action on a fact actually present in the inputs (SOP
+    Agent report, Maintenance recommended CMMS actions, parts, PM, calibration,
+    past WO patterns, draft WO). Do NOT invent step numbers, part numbers, SOP
+    IDs, or torque/spec values that are not given. If the inputs do not contain
+    a specific fix for a role, give the most specific next diagnostic step the
+    facts DO support rather than a generic platitude.
   - Keep each role's list to 2-5 actions. Do not repeat the same action
     verbatim across roles unless it genuinely requires both people to act.
   - The supervisor's actions should include notifying/coordinating with the
     other roles when appropriate.
+  - IMPORTANT — severity/urgency wording: the personnel MUST be told how urgent
+    this is, and the UI also shows the FINAL priority (CRITICAL / HIGH / MEDIUM /
+    LOW) as a badge next to your summary. These two must NEVER contradict each
+    other. Therefore:
+      * If you state a severity or urgency level in the summary prose, use the
+        Maintenance Agent's FINAL priority verbatim (e.g. a HIGH-priority issue
+        is described as "high-priority" / "urgent", never as "low-severity" or
+        "minor"). The word you use and the badge must match.
+      * NEVER derive the severity wording from the "Deviation magnitude" field
+        below. That field reflects only how far the sensor drifted from its
+        threshold — it is NOT the overall urgency. A small deviation can still
+        be HIGH priority (e.g. overdue PM/calibration or a part shortage), so
+        calling such an issue "low-severity" would dangerously understate it.
+      * State the urgency plainly so the reader knows how serious it is, then
+        describe what is happening and what is at risk.
 
 Proportionality (important):
   - Match the response to the FINAL priority and scope given to you. A single
@@ -207,6 +250,81 @@ def _fallback_roles(narrative: str) -> dict:
     return {role: {"summary": narrative, "actions": []} for role in ROLES}
 
 
+# ── Grounding guard: no invented part numbers / SOP IDs / WO numbers ─────────────
+
+# Citeable identifiers in this domain look like PART/SOP/WO/INC/NCR codes:
+# hyphenated uppercase-alphanumeric groups that contain at least one digit,
+# e.g. IMP-CAP-7730, TCP-SEAL-O42, SOP-TCP-001, WO-CHA-2915, INC-2915-001,
+# NCR-CHA-2915. Plain words and chamber/sensor names are intentionally excluded.
+_IDENT_RE = re.compile(r"\b[A-Z][A-Z0-9]*(?:[-/][A-Z0-9]+)+\b")
+
+
+def _normalize_ident(tok: str) -> str:
+    """Case/separator-insensitive form so 'LOT_29A' and 'LOT-29a' compare equal."""
+    return tok.upper().replace("_", "-").replace("/", "-")
+
+
+def _cited_idents(text: str) -> list[str]:
+    """Identifier-like citations in a piece of text (must contain a digit)."""
+    return [m.group(0) for m in _IDENT_RE.finditer(text or "")
+            if any(c.isdigit() for c in m.group(0))]
+
+
+def _verify_grounding(roles: dict, corpus: str) -> dict:
+    """
+    Deterministic anti-hallucination guard. Every part number, SOP ID, WO/INC/NCR
+    number the LLM cites MUST appear verbatim in `corpus` (the exact upstream data
+    the LLM was given). An ACTION that cites an identifier not present in the data
+    is treated as invented and dropped — the operator never sees a fabricated part
+    or procedure number. Ungrounded identifiers in a SUMMARY are logged and the
+    identifier is scrubbed from the prose (the summary text is kept, since it is
+    narrative rather than an executable instruction).
+
+    This runs AFTER the LLM and does not trust it: grounding is decided by string
+    membership against the source data, not by the model's own claims.
+    """
+    corpus_norm = _normalize_ident(corpus)
+    dropped, scrubbed = [], []
+
+    for role, block in roles.items():
+        if not isinstance(block, dict):
+            continue
+
+        kept_actions = []
+        for action in block.get("actions", []) or []:
+            bad = [tok for tok in _cited_idents(str(action))
+                   if _normalize_ident(tok) not in corpus_norm]
+            if bad:
+                dropped.append((role, str(action), bad))
+            else:
+                kept_actions.append(action)
+        block["actions"] = kept_actions
+
+        summary = str(block.get("summary", "") or "")
+        bad_sum = [tok for tok in _cited_idents(summary)
+                   if _normalize_ident(tok) not in corpus_norm]
+        if bad_sum:
+            for tok in bad_sum:
+                summary = summary.replace(tok, "the referenced item")
+            summary = re.sub(r"\s{2,}", " ", summary).strip()
+            block["summary"] = summary
+            scrubbed.append((role, bad_sum))
+
+    if dropped:
+        print(f"[Supervisor Agent] GROUNDING GUARD: dropped {len(dropped)} action(s) "
+              f"citing identifiers not found in the upstream data:")
+        for role, action, bad in dropped:
+            print(f"    - [{role}] invented {bad}: {action!r}")
+    if scrubbed:
+        print(f"[Supervisor Agent] GROUNDING GUARD: scrubbed ungrounded identifiers "
+              f"from {len(scrubbed)} summary/summaries: {scrubbed}")
+    if not dropped and not scrubbed:
+        print("[Supervisor Agent] GROUNDING GUARD: all cited identifiers verified "
+              "against upstream data.")
+
+    return roles
+
+
 def synthesise_recommendations(alert: dict,
                                 recommendation: dict,
                                 sop_report: str,
@@ -227,6 +345,7 @@ def synthesise_recommendations(alert: dict,
         f"  - {p.get('part_number')} ({p.get('description')}): "
         f"{p.get('status')}, qty {p.get('quantity_on_hand')}, "
         f"lead time {p.get('lead_time_days')} days"
+        + (f", loc {p.get('storage_location')}" if p.get('storage_location') else "")
         for p in parts
     ]) or "  - No parts mapped to this component category."
 
@@ -236,8 +355,17 @@ def synthesise_recommendations(alert: dict,
         f"Sensor        : {alert.get('sensor', 'N/A')}\n"
         f"Chamber       : {alert.get('chamber_id', 'N/A')}\n"
         f"Wafer / Lot   : {alert.get('wafer_id', 'N/A')} / {alert.get('lot_id', 'N/A')}\n"
-        f"Severity      : {alert.get('severity', 'N/A')}\n"
+        f"Deviation magnitude (how far the sensor drifted from threshold — "
+        f"NOT the overall urgency): {alert.get('severity', 'N/A')}\n"
+        f"NOTE: The overall urgency is the Maintenance Agent's FINAL priority "
+        f"below, which may be higher than this deviation magnitude (e.g. a small "
+        f"drift can still be HIGH priority due to overdue PM/calibration or a "
+        f"part shortage). Communicate urgency using the FINAL priority only.\n"
     )
+
+    cmms_actions = recommendation.get("recommended_actions", []) or []
+    cmms_action_lines = "\n".join(f"  - {a}" for a in cmms_actions) \
+        or "  - (none provided)"
 
     maint_block = (
         f"\n{'='*50}\n"
@@ -254,7 +382,15 @@ def synthesise_recommendations(alert: dict,
         f"SPARE PARTS AVAILABILITY:\n{parts_lines}\n\n"
         f"CALIBRATION STATUS:\n"
         f"  Component: {calib_status.get('component', 'N/A')}\n"
-        f"  Status   : {calib_status.get('status', 'N/A')}\n\n"
+        f"  Status   : {calib_status.get('status', 'N/A')}\n"
+        f"  Last cal : {calib_status.get('last_date', 'N/A')} | "
+        f"Next due: {calib_status.get('next_due', 'N/A')}\n"
+        f"  Notes    : {calib_status.get('notes', 'N/A')}\n\n"
+        f"RECOMMENDED CMMS ACTIONS (specific technical steps from the Maintenance "
+        f"Agent — use these as the basis for the maintenance_lead's actions):\n"
+        f"{cmms_action_lines}\n\n"
+        f"PAST WORK-ORDER PATTERNS (what resolved this fault before — reuse the "
+        f"specific fix if applicable):\n  {recommendation.get('past_wo_patterns', 'N/A')}\n\n"
         f"DRAFT WORK ORDER:\n{recommendation.get('draft_wo_header', 'N/A')}\n\n"
         f"MAINTENANCE NARRATIVE:\n  {recommendation.get('llm_narrative', 'N/A')}\n"
     )
@@ -292,7 +428,14 @@ def synthesise_recommendations(alert: dict,
               "Falling back to raw text for all roles.")
         roles = _fallback_roles(raw)
 
-    return {role: roles.get(role, {"summary": "", "actions": []}) for role in ROLES}
+    roles = {role: roles.get(role, {"summary": "", "actions": []}) for role in ROLES}
+
+    # Deterministic anti-hallucination pass: verify every cited part/SOP/WO/NCR
+    # identifier actually exists in the data we handed the LLM (user_msg). Any
+    # action citing an invented identifier is dropped before it reaches the UI.
+    roles = _verify_grounding(roles, user_msg)
+
+    return roles
 
 
 # ── Main pipeline function ──────────────────────────────────────────────────────

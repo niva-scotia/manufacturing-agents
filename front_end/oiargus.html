@@ -154,6 +154,16 @@
   .chamber.fault   { border-color: var(--red); box-shadow: 0 0 28px rgba(248,81,73,0.22), inset 0 0 40px rgba(248,81,73,0.05); }
   .chamber.nominal { border-color: rgba(94,234,212,0.55); box-shadow: 0 0 22px rgba(94,234,212,0.10); }
   .chamber.watch   { border-color: var(--yellow); box-shadow: 0 0 22px rgba(251,191,36,0.14); }
+  /* New-error alert flash: the tile of the machine that just faulted flickers
+     for a few seconds to grab the operator's attention, then settles back to
+     the static .fault look. Applied by renderChambers() while
+     Date.now() < flickerUntil[chamber]. 0%/100% match the static .fault style
+     so the flash begins and ends without a visible jump. */
+  @keyframes chamberFlicker {
+    0%, 100% { border-color: var(--red); box-shadow: 0 0 28px rgba(248,81,73,0.22), inset 0 0 40px rgba(248,81,73,0.05); }
+    50%      { border-color: #ffb0b0;    box-shadow: 0 0 44px rgba(248,81,73,0.66), inset 0 0 62px rgba(248,81,73,0.2); }
+  }
+  .chamber.flicker { animation: chamberFlicker 0.8s ease-in-out infinite; }
   .ch-head { display: flex; align-items: center; justify-content: space-between; }
   .ch-name { display: flex; align-items: center; gap: 11px; font-family: var(--mono); font-size: 26px; font-weight: 700; letter-spacing: 1px; }
   .ch-name .dot { width: 11px; height: 11px; }
@@ -203,8 +213,9 @@
   .trend-title { font-family: var(--mono); font-weight: 700; font-size: 11px; letter-spacing: 1.6px; color: var(--text2); }
   .trend-agent { font-family: var(--mono); font-size: 8.5px; letter-spacing: 1.4px; color: var(--teal); border: 1px solid rgba(94,234,212,0.3); border-radius: 6px; padding: 4px 8px; align-self: flex-start; }
   .trend-items { display: flex; flex: 1; min-width: 0; }
-  .trend-item { flex: 1; min-width: 0; padding: 20px 24px; border-right: 1px solid var(--border); display: flex; flex-direction: column; justify-content: center; gap: 13px; }
+  .trend-item { flex: 1; min-width: 0; padding: 20px 24px; border-right: 1px solid var(--border); display: flex; flex-direction: column; justify-content: center; gap: 13px; cursor: pointer; transition: background 0.15s; }
   .trend-item:last-child { border-right: none; }
+  .trend-item:hover { background: rgba(255,255,255,0.025); }
   .trend-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .trend-name { font-family: var(--mono); font-size: 12px; color: var(--text2); letter-spacing: 0.5px; }
   .trend-pct { font-family: var(--mono); font-size: 19px; font-weight: 700; }
@@ -302,6 +313,26 @@
     justify-content: center; gap: 10px; transition: filter 0.15s;
   }
   .fix-btn:hover { filter: brightness(1.08); }
+
+  /* Resolve/"Fix Error" button — green, distinct from the red how-to-fix button.
+     Clicking it marks the error resolved and removes it from the feed. */
+  .resolve-btn {
+    width: 100%; font-family: var(--mono); font-size: 12px; font-weight: 700; letter-spacing: 1.6px;
+    color: #052016; background: linear-gradient(90deg, #34d399, #2dd4bf); border: none; border-radius: 12px;
+    padding: 13px; cursor: pointer; margin-bottom: 12px; display: flex; align-items: center;
+    justify-content: center; gap: 9px; transition: filter 0.15s;
+  }
+  .resolve-btn:hover { filter: brightness(1.08); }
+
+  /* Secondary navigation button (e.g. "View Chamber") — bordered teal accent,
+     matching the app's .btn / .plant-view-btn language and the modal button size. */
+  .nav-btn {
+    width: 100%; font-family: var(--mono); font-size: 12px; font-weight: 700; letter-spacing: 1.6px;
+    color: var(--teal); background: rgba(94,234,212,0.06); border: 1px solid rgba(94,234,212,0.35);
+    border-radius: 12px; padding: 13px; cursor: pointer; display: flex; align-items: center;
+    justify-content: center; gap: 9px; transition: all 0.15s;
+  }
+  .nav-btn:hover { background: rgba(94,234,212,0.12); border-color: var(--teal); color: var(--text); }
 
   /* Resolution Playbook (Supervisor Agent) */
   .pb-cause-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
@@ -481,7 +512,7 @@ const DEMO = {
     },
     CHB: {
       name: 'CHB', status: 'nominal', monitored: true,
-      machine: 'PECVD Deposition Cluster', bay: 'BAY 3 · DEPOSITION',
+      machine: 'LAM 9600 TCP Etcher', bay: 'BAY 3 · ETCH',
       chamber: 'CHB', lot: 'LOT_31B', recipe: 'METAL_ETCH_A_V3', wafers: '40/43', oee: '41%', rfHrs: '988h', workOrder: 'NONE',
       sensors: [
         { label: 'TCP TOP PWR', value: '344.2', unit: 'W', status: 'ok' },
@@ -508,7 +539,7 @@ const DEMO = {
   tools: [
     { id: 'CHA',     status: 'fault',   monitored: true,  machine: 'Multi-Chamber Etch System', bay: 'BAY 2' },
     { id: 'EFEM-LP1',status: 'idle',    monitored: false, machine: 'EFEM Load Port',            bay: 'BAY 2' },
-    { id: 'CHB',     status: 'nominal', monitored: true,  machine: 'PECVD Deposition Cluster',  bay: 'BAY 3' },
+    { id: 'CHB',     status: 'nominal', monitored: true,  machine: 'LAM 9600 TCP Etcher',  bay: 'BAY 3' },
     { id: 'MET-1',   status: 'nominal', monitored: false, machine: 'Metrology / CD-SEM',        bay: 'BAY 3' },
     { id: 'AMHS-S2', status: 'nominal', monitored: false, machine: 'AMHS Stocker',              bay: 'AISLE' },
     { id: 'WB-2',    status: 'nominal', monitored: false, machine: 'Wet Bench Clean',           bay: 'BAY 3' },
@@ -609,12 +640,89 @@ function renderCritical() {
     <span class="crit-time">${c.time}</span>`;
 }
 
+// ── New-error alert flash ──────────────────────────────────────────────────
+// flickerUntil[chamber] = ms timestamp until which that chamber's tile flashes.
+// detectNewErrors() compares each poll's error ids against the previous poll's:
+// any id that just appeared marks its chamber to flash for FLICKER_MS. Set-diff
+// (not "latest id changed") so it also fires correctly after a feed reset.
+const FLICKER_MS = 4000;              // 4s flash — within the 3–5s target
+const flickerUntil = {};
+let prevErrorIds = new Set();
+function detectNewErrors() {
+  const errs = state.errors || [];
+  const curIds = new Set();
+  const newlyFaulted = new Set();
+  errs.forEach(e => {
+    curIds.add(e.id);
+    if (!prevErrorIds.has(e.id) && e.chamber) newlyFaulted.add(e.chamber);
+  });
+  newlyFaulted.forEach(ch => { flickerUntil[ch] = Date.now() + FLICKER_MS; });
+  prevErrorIds = curIds;
+}
+
+// ── Fix / resolve errors ────────────────────────────────────────────────────
+// The feed (dashboard_data.json) is replaced on every poll, so a "fixed" error
+// would reappear unless remembered. fixedIds holds resolved error ids (memory
+// only — NOT persisted, so it can't wrongly filter a later run that reuses the
+// same ids). applyFixes() re-derives the board from the REMAINING unfixed errors
+// on every poll and immediately after a fix, so a machine returns to normal only
+// once ALL its detected errors are fixed.
+const fixedIds = new Set();
+const _secs = t => { const p = String(t || '').split(':').map(Number); return (p[0]||0)*3600 + (p[1]||0)*60 + (p[2]||0); };
+function chamberErrors(ch) { return (state.errors || []).filter(e => e.chamber === ch); }
+function latestChamberError(ch) {
+  const es = chamberErrors(ch);
+  return es.length ? es.reduce((a, b) => _secs(b.time) >= _secs(a.time) ? b : a) : null;
+}
+function applyFixes() {
+  // 1. Drop fixed errors from the incoming feed.
+  state.errors = (state.errors || []).filter(e => !fixedIds.has(e.id));
+  // 2. If the critical banner's error was fixed, re-point it to the newest
+  //    remaining error (or clear it).
+  if (state.critical && fixedIds.has(state.critical.id)) {
+    const r = state.errors;
+    const nc = r.length ? r.reduce((a, b) => _secs(b.time) >= _secs(a.time) ? b : a) : null;
+    state.critical = nc ? { id: nc.id, chamber: nc.chamber, pc: nc.pc, text: nc.text, time: nc.time } : null;
+  }
+  // 3. Re-derive each chamber from its REMAINING errors + trends.
+  for (const ch in (state.chambers || {})) {
+    const c = state.chambers[ch];
+    const errs = chamberErrors(ch);
+    const trends = (state.trends || []).filter(t => t.chamber === ch);
+    if (Array.isArray(c.findings))
+      c.findings = c.findings.filter(f => f.type !== 'anomaly' || !fixedIds.has(f.id));
+    c.status = errs.length ? 'fault'
+             : (trends.length || (c.findings || []).some(f => f.type === 'trend')) ? 'watch'
+             : 'nominal';
+    // A breached sensor whose error is now fixed reverts to watch (if still
+    // trending) or ok; then recompute the diagram module colours.
+    const faultLabels = new Set(errs.map(e => e.pc));
+    (c.sensors || []).forEach(s => {
+      if (s.status === 'fault' && !faultLabels.has(s.label))
+        s.status = trends.some(t => t.pc === s.label) ? 'watch' : 'ok';
+    });
+    c.modules = (c.sensors || []).map(s => s.status === 'fault' ? 'red' : s.status === 'watch' ? 'yellow' : 'green');
+    // A fault whose sensor isn't among the 4 shown still reads as faulted.
+    if (c.status === 'fault' && c.modules.length && !c.modules.includes('red')) c.modules[0] = 'red';
+  }
+}
+function fixError(id) {
+  if (!id) return;
+  fixedIds.add(id);
+  applyFixes();   // update state now — don't wait for the next poll
+  renderAll();    // refresh feed tiles + plant floor immediately
+}
+
+let lastFloorHTML = '';
 function renderChambers() {
   const order = Object.keys(state.chambers);
-  document.getElementById('floor').innerHTML = order.map((key, i) => {
+  const html = order.map((key, i) => {
     const ch = state.chambers[key];
+    // Flash only while inside this chamber's alert window; afterwards the class
+    // drops and the tile shows the plain static .fault style again.
+    const flick = (ch.status === 'fault' && Date.now() < (flickerUntil[key] || 0)) ? ' flicker' : '';
     const card = `
-      <div class="chamber ${ch.status}" data-ch="${key}">
+      <div class="chamber ${ch.status}${flick}" data-ch="${key}">
         <div class="ch-head">
           <div class="ch-name">${ch.name} <span class="dot ${ch.status === 'fault' ? 'red' : ch.status === 'watch' ? 'yellow' : 'green'}"></span></div>
           <div class="ch-status ${ch.status}">${STATUS_TEXT[ch.status]}</div>
@@ -628,7 +736,15 @@ function renderChambers() {
     return i === 0 ? card + `<div class="aisle"><span>SERVICE AISLE</span></div>` : card;
   }).join('');
 
-  document.querySelectorAll('.chamber').forEach(el => {
+  // Only touch the DOM when the markup actually changed. This keeps a running
+  // flash animation intact across the 1s poll cycle (it restarts only when data
+  // — or the flash on/off state — genuinely changes), while real-time value
+  // updates still re-render the moment any reading changes.
+  if (html === lastFloorHTML) return;
+  lastFloorHTML = html;
+  const floor = document.getElementById('floor');
+  floor.innerHTML = html;
+  floor.querySelectorAll('.chamber').forEach(el => {
     const key = el.dataset.ch;
     el.addEventListener('mouseenter', e => showTooltip(key, e));
     el.addEventListener('mousemove', e => moveTooltip(e));
@@ -679,17 +795,26 @@ function renderErrors() {
 }
 
 function renderTrends() {
-  document.getElementById('trendItems').innerHTML = (state.trends || []).map(t => `
-    <div class="trend-item">
+  document.getElementById('trendItems').innerHTML = (state.trends || []).map((t, i) => {
+    // Trend watch uses yellow (caution) highlights — a low-progress 'green' tone
+    // is shown as yellow here so the strip reads as a watch signal. Red stays red.
+    const tone = t.tone === 'green' ? 'yellow' : t.tone;
+    return `
+    <div class="trend-item" data-idx="${i}">
       <div class="trend-top">
         <span class="trend-name">${t.label}</span>
-        <span class="trend-pct ${t.tone}">${t.pct}%</span>
+        <span class="trend-pct ${tone}">${t.pct}%</span>
       </div>
       <div class="trend-spark">
-        ${sparkline(t.data, t.tone, 110, 28)}
+        ${sparkline(t.data, tone, 110, 28)}
         <span class="trend-status">${t.status}</span>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
+  // Each trend item opens a detail modal for THAT specific drift event.
+  document.querySelectorAll('.trend-item').forEach(el => {
+    el.addEventListener('click', () => openTrendDetail(el.dataset.idx));
+  });
 }
 
 /* ───────────── HOVER TOOLTIP ───────────── */
@@ -730,12 +855,16 @@ function hideTooltip() { tt.classList.remove('show'); }
 const backdrop = document.getElementById('backdrop');
 const mount = document.getElementById('modalMount');
 
+// Which chamber's MACHINE DETAIL modal is currently open (null = none / a
+// different modal). Lets refreshOpenModal() live-patch its values each poll.
+let openDetailKey = null, openDetailSig = '';
 function openModal(html, cls) {
+  openDetailKey = null;   // any modal open resets this; openDetail() re-sets it
   mount.innerHTML = `<div class="modal ${cls}">${html}</div>`;
   backdrop.classList.add('show');
   mount.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', closeModal));
 }
-function closeModal() { backdrop.classList.remove('show'); mount.innerHTML = ''; }
+function closeModal() { backdrop.classList.remove('show'); mount.innerHTML = ''; openDetailKey = null; }
 // Escape agent-authored (LLM) text before inserting into HTML.
 function esc(s) {
   return String(s == null ? '' : s)
@@ -803,13 +932,78 @@ function openErrorDetail(id) {
       </div>
       ${stepsHtml}
       ${expl}
-      <button class="fix-btn" id="evtChamberBtn"
-        style="margin-top:16px;background:rgba(255,255,255,0.03);color:var(--text2);border:1px solid var(--border2);">
-        VIEW CHAMBER ${e.chamber} →
-      </button>
+      <button class="resolve-btn" data-resolve="${e.id}" style="margin-top:16px;">FIX ERROR</button>
+      <button class="nav-btn" id="evtChamberBtn">VIEW CHAMBER ${e.chamber} →</button>
     </div>`, 'detail');
+  // Fix THIS specific error, then close — it disappears from the incoming-errors
+  // feed. Lets the user resolve any error, not just the chamber's most recent.
+  const rb = mount.querySelector('[data-resolve]');
+  if (rb) rb.addEventListener('click', () => { fixError(e.id); closeModal(); });
   const cbtn = document.getElementById('evtChamberBtn');
   if (cbtn) cbtn.addEventListener('click', () => { if (state.chambers[e.chamber]) openDetail(e.chamber); });
+}
+
+function openTrendDetail(idx) {
+  // Show the SPECIFIC drifting sensor this trend tile represents — its current
+  // value, projected breach, slope and trend quality (R²) — the pre-fault
+  // early-warning counterpart to openErrorDetail().
+  const t = (state.trends || [])[idx];
+  if (!t) return;
+  const ch = state.chambers[t.chamber];
+  const col = STATUS_COLOR.watch;   // trends are a WATCH state, not yet a fault
+  const hasThr = t.threshold_min != null && t.threshold_max != null;
+  const rangeStr = hasThr ? `${t.threshold_min} – ${t.threshold_max}` : '—';
+  const rising = t.direction ? t.direction === 'increasing' : (t.tone !== 'green');
+  const arrow = rising ? '↑' : '↓';
+  const rate = (t.rate_per_step != null)
+    ? `${t.rate_per_step > 0 ? '+' : ''}${t.rate_per_step}/step` : '—';
+  const r2 = (t.r_squared != null) ? t.r_squared : '—';
+  // "Time to breach" is the headline for a trend: it's the actionable lead time.
+  const breachHtml = t.time_to_breach ? `
+    <div class="stat-box" style="margin-bottom:14px;border-color:rgba(251,191,36,0.4);">
+      <label>PROJECTED BREACH</label>
+      <div class="val" style="font-size:18px;color:var(--yellow);">in ${t.time_to_breach}</div>
+    </div>` : '';
+  const expl = t.explanation
+    ? `<div class="findings-label" style="margin-top:16px;">WHY IT MATTERS</div><div class="cost-desc">${esc(t.explanation)}</div>`
+    : '';
+  openModal(`
+    <div class="modal-head">
+      <span class="dot" style="background:${col};box-shadow:0 0 7px ${col};"></span>
+      <span class="modal-title">TREND DETAIL</span>
+      <span class="modal-sub">${t.id || t.label}</span>
+      <button class="modal-x" data-close>✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="md-title">
+        <span class="md-name">${t.pc || t.label} ${arrow}</span>
+        <span class="tag trend">Trend</span>
+      </div>
+      <div class="md-machine">${t.chamber ? t.chamber + (ch ? ' · ' + ch.machine : '') : t.label}</div>
+      <div class="md-meta">
+        <div class="kv"><label>WAFER</label><span>${t.wafer_id ?? '—'}</span></div>
+        <div class="kv"><label>LOT</label><span>${t.lot ?? '—'}</span></div>
+        <div class="kv"><label>CHAMBER</label><span>${t.chamber ?? '—'}</span></div>
+        <div class="kv"><label>STEP</label><span>${t.step ?? '—'}</span></div>
+        <div class="kv"><label>DETECTED</label><span>${t.time ?? '—'}</span></div>
+        <div class="kv"><label>PROGRESS</label><span>${t.pct}%</span></div>
+      </div>
+      <div class="stat-grid">
+        <div class="stat-box"><label>CURRENT VALUE</label><div class="val">${t.current_value ?? '—'} <span class="unit">${t.unit || ''}</span></div></div>
+        <div class="stat-box"><label>ALLOWED RANGE</label><div class="val" style="font-size:16px;">${rangeStr} <span class="unit">${hasThr ? (t.unit || '') : ''}</span></div></div>
+        <div class="stat-box"><label>RATE OF CHANGE</label><div class="val" style="font-size:16px;">${rate}</div></div>
+        <div class="stat-box"><label>LINEARITY (R²)</label><div class="val" style="font-size:16px;">${r2}</div></div>
+      </div>
+      ${breachHtml}
+      <div class="stat-box" style="margin-bottom:14px;">
+        <label>DEVIATION</label>
+        <div class="val" style="font-size:16px;color:var(--yellow);">${t.deviation || t.status || ''}</div>
+      </div>
+      ${expl}
+      ${t.chamber && state.chambers[t.chamber] ? `<button class="nav-btn" id="trendChamberBtn" style="margin-top:16px;">VIEW CHAMBER ${t.chamber} →</button>` : ''}
+    </div>`, 'detail');
+  const cbtn = document.getElementById('trendChamberBtn');
+  if (cbtn) cbtn.addEventListener('click', () => { if (state.chambers[t.chamber]) openDetail(t.chamber); });
 }
 
 function openDetail(key) {
@@ -817,7 +1011,7 @@ function openDetail(key) {
   if (!ch) return;
   const col = STATUS_COLOR[ch.status];
   const statBoxes = (ch.sensors || []).map(s =>
-    `<div class="stat-box"><label>${s.label}</label><div class="val">${s.value} <span class="unit">${s.unit}</span></div></div>`).join('');
+    `<div class="stat-box" data-sensor="${s.label}"><label>${s.label}</label><div class="val">${s.value} <span class="unit">${s.unit}</span></div></div>`).join('');
   const noFindings = !ch.findings || ch.findings.length === 0;
   const findings = ch.findings.map(f => {
     const fc = f.type === 'anomaly' ? 'var(--teal)' : f.type === 'quality' ? 'var(--green)' : 'var(--yellow)';
@@ -850,12 +1044,27 @@ function openDetail(key) {
         <span class="cost-title"><span class="cost-ico">$</span> COST OF CONTINUED RUN</span>
         <span class="cost-badge">${cost.badge}</span>
       </div>
-      <div class="cost-figure">${cost.figure} <span class="cost-per">${cost.per}</span></div>
+      <div class="cost-figure" data-md="costFigure">${cost.figure} <span class="cost-per">${cost.per}</span></div>
       ${costSub}
       <div class="cost-desc">${esc(cost.desc)}</div>
     </div>` : '';
   const fixBtnHtml = showResolution
     ? `<button class="fix-btn" data-fix>HOW TO FIX THIS ANOMALY</button>` : '';
+  // The machine's CURRENT error = its most recent unfixed error. "Fix Error"
+  // resolves it; on re-render the next most recent error takes its place, and
+  // once none remain the chamber shows nominal.
+  const curErr = latestChamberError(key);
+  const activeErrHtml = curErr ? `
+    <div class="findings-label">ACTIVE ERROR</div>
+    <div class="stat-box" style="margin-bottom:12px;border-left:3px solid var(--red);">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+        <span data-md="aePc" style="font-family:var(--mono);font-weight:700;color:var(--text);letter-spacing:0.5px;">${curErr.pc}</span>
+        <span class="err-id" data-md="aeId">${curErr.id}</span>
+      </div>
+      <div data-md="aeText" style="font-size:13px;color:var(--text2);margin-top:6px;line-height:1.4;">${esc(curErr.text)}</div>
+      <div class="err-meta" data-md="aeMeta" style="margin-top:6px;">${errMeta(curErr) || ''}</div>
+    </div>
+    <button class="resolve-btn" data-resolve="${curErr.id}">FIX ERROR</button>` : '';
   openModal(`
     <div class="modal-head">
       <span class="dot" style="background:${col};box-shadow:0 0 7px ${col};"></span>
@@ -865,25 +1074,79 @@ function openDetail(key) {
     <div class="modal-body">
       <div class="md-title">
         <span class="md-name">${ch.name}</span>
-        <span class="badge ${ch.status}">${STATUS_TEXT[ch.status]}</span>
+        <span class="badge ${ch.status}" data-md="badge">${STATUS_TEXT[ch.status]}</span>
       </div>
       <div class="md-machine">${ch.machine}</div>
       <div class="md-meta">
         <div class="kv"><label>CHAMBER</label><span>${ch.chamber}</span></div>
-        <div class="kv"><label>LOT</label><span>${ch.lot}</span></div>
-        <div class="kv"><label>WAFERS</label><span>${ch.wafers}</span></div>
-        <div class="kv"><label>RECIPE</label><span>${ch.recipe}</span></div>
-        <div class="kv"><label>OEE</label><span>${ch.oee}</span></div>
-        <div class="kv"><label>WORK ORDER</label><span style="color:${ch.workOrder && ch.workOrder !== 'NONE' ? 'var(--red)' : 'var(--text)'};">${ch.workOrder}</span></div>
+        <div class="kv"><label>LOT</label><span data-md="lot">${ch.lot}</span></div>
+        <div class="kv"><label>WAFERS</label><span data-md="wafers">${ch.wafers}</span></div>
+        <div class="kv"><label>RECIPE</label><span data-md="recipe">${ch.recipe}</span></div>
+        <div class="kv"><label>OEE</label><span data-md="oee">${ch.oee}</span></div>
+        <div class="kv"><label>WORK ORDER</label><span data-md="wo" style="color:${ch.workOrder && ch.workOrder !== 'NONE' ? 'var(--red)' : 'var(--text)'};">${ch.workOrder}</span></div>
       </div>
       <div class="stat-grid">${statBoxes}</div>
       ${costHtml}
+      ${activeErrHtml}
       ${fixBtnHtml}
       <div class="findings-label">AGENT FINDINGS</div>
       <div class="findings-scroll">${noFindings ? '<div style="font-family:var(--mono);font-size:11px;color:var(--muted);">No active findings — chamber nominal.</div>' : findings}</div>
     </div>`, 'detail');
+  // Fix the most recent error, then re-render: the modal now shows the next most
+  // recent error, or the nominal state once every error has been fixed.
+  const resolveBtn = mount.querySelector('[data-resolve]');
+  if (resolveBtn) resolveBtn.addEventListener('click', () => { fixError(resolveBtn.dataset.resolve); openDetail(key); });
   const fixBtn = mount.querySelector('[data-fix]');
   if (fixBtn) fixBtn.addEventListener('click', () => openPlaybook(key));
+  // Mark this machine modal as open so the poll loop can live-patch its values.
+  openDetailKey = key;
+  openDetailSig = _detailSig(ch, key);
+}
+
+// Structure fingerprint: if any of these change, values can't just be patched —
+// the modal has to be rebuilt (sections appear/disappear, or the cost box flips
+// styling). Including the cost level+badge means the pending→estimate transition
+// forces a full re-render, so the box regains its red margins and the "ESTIMATE
+// PENDING" badge is replaced once the Sustainability Agent's estimate arrives.
+function _detailSig(ch, key) {
+  const cost = ch.sustainability || costFallback(ch);
+  return [ch.status === 'nominal' ? 'nom' : 'act',
+          latestChamberError(key) ? 'err' : 'noerr',
+          (ch.sensors || []).length,
+          cost.level, cost.badge].join('|');
+}
+
+// Live-update the OPEN machine-detail modal in place (option B): patch the value
+// nodes without rebuilding, so scroll position and button listeners survive. Runs
+// every poll. If the modal's structure must change, fall back to a full re-render.
+function refreshOpenModal() {
+  if (!openDetailKey) return;
+  const ch = state.chambers[openDetailKey];
+  const body = mount.querySelector('.modal.detail .modal-body');
+  if (!ch || !body) return;
+  if (_detailSig(ch, openDetailKey) !== openDetailSig) { openDetail(openDetailKey); return; }
+
+  const setMd = (k, v) => { const el = body.querySelector(`[data-md="${k}"]`); if (el) el.textContent = v; };
+  const badge = body.querySelector('[data-md="badge"]');
+  if (badge) { badge.textContent = STATUS_TEXT[ch.status]; badge.className = `badge ${ch.status}`; }
+  setMd('lot', ch.lot); setMd('wafers', ch.wafers); setMd('recipe', ch.recipe);
+  setMd('oee', ch.oee); setMd('wo', ch.workOrder);
+  // Sensor readings — the core live values.
+  body.querySelectorAll('.stat-box[data-sensor]').forEach(box => {
+    const s = (ch.sensors || []).find(x => x.label === box.dataset.sensor);
+    const v = box.querySelector('.val');
+    if (s && v) v.innerHTML = `${s.value} <span class="unit">${s.unit}</span>`;
+  });
+  const cf = body.querySelector('[data-md="costFigure"]');
+  if (cf) { const cost = ch.sustainability || costFallback(ch); cf.innerHTML = `${cost.figure} <span class="cost-per">${cost.per}</span>`; }
+  // ACTIVE ERROR — keep it pointed at the chamber's current most-recent error.
+  const curErr = latestChamberError(openDetailKey);
+  if (curErr) {
+    setMd('aePc', curErr.pc); setMd('aeId', curErr.id);
+    setMd('aeText', curErr.text); setMd('aeMeta', errMeta(curErr) || '');
+    const rb = body.querySelector('[data-resolve]');
+    if (rb) rb.dataset.resolve = curErr.id;
+  }
 }
 
 // Honest "no live estimate" state for the Cost box when a chamber has no
@@ -926,7 +1189,7 @@ function openPlaybook(key) {
   const role = activeRole();
   let bodyHtml, sub = ch.name;
   if (!pb || !pb.roles || !pb.roles.length) {
-    bodyHtml = `<div class="pb-note"><span class="pb-note-ico">ⓘ</span><span>No supervisor guidance available for ${ch.name}. Role-specific instructions are generated by the Supervisor Agent when the live pipeline runs (LIVE_AGENTS=1) on an active anomaly.</span></div>`;
+    bodyHtml = `<div class="pb-note"><span class="pb-note-ico">ⓘ</span><span>Waiting for the Supervisor Agent to run for ${ch.name}. The agents are still working through the pipeline — the Supervisor Agent produces your role-specific guidance last, once the upstream agents finish analyzing this anomaly. Hang tight for a moment and it will appear here automatically.</span></div>`;
   } else {
     // Show ONLY the covering role's guidance (their onboarding position). If no
     // role is set, fall back to showing every role.
@@ -1052,7 +1315,10 @@ async function loadData() {
     if (json && json.chambers) {
       state = json;
       liveConnected = true;
+      applyFixes();          // strip already-fixed errors + re-derive chamber state
+      detectNewErrors();     // flag any chamber whose error just arrived, to flash its tile
       renderAll();
+      refreshOpenModal();    // live-patch the open machine-detail modal's values in place
       // Real pipeline state: light the running agent stage, or idle when none.
       if (json.current_stage) setPipelineStage(json.current_stage);
       else setPipelineIdle();

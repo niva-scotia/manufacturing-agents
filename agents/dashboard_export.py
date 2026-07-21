@@ -28,15 +28,11 @@ SENSORS = [
     ("pressure",    "PRESSURE",    "mTorr", {"min": 942, "max": 1420}),
     ("rf_btm_pwr",  "RF BTM PWR",  "W",     {"min": 124, "max": 142}),
     ("bcl3_flow",   "BCl3 FLOW",   "sccm",  {"min": 740, "max": 765}),
+    ("cl2_flow",    "Cl2 FLOW",    "sccm",  {"min": 748, "max": 758}),
 ]
-THRESHOLDS = {s[0]: s[3] for s in SENSORS}
-THRESHOLDS["cl2_flow"] = {"min": 748, "max": 758}
+THRESHOLDS = {s[0]: s[3] for s in SENSORS}   # all 5 monitored sensors
 LABELS = {s[0]: s[1] for s in SENSORS}
 UNITS  = {s[0]: s[2] for s in SENSORS}
-# cl2_flow is monitored but not one of the 4 chamber-card sensors; give it a
-# label/unit so per-event error tiles for it still render cleanly.
-LABELS.setdefault("cl2_flow", "CL2 FLOW")
-UNITS.setdefault("cl2_flow", "sccm")
 
 TREND_CONFIG = {
     "min_steps": 8, "min_range_fraction": 0.15, "min_r_squared": 0.85,
@@ -89,8 +85,10 @@ SUPPORT_TOOLS = [
     {"id": "AMHS-S2",  "status": "nominal", "monitored": False, "machine": "AMHS Stocker",      "bay": "AISLE"},
     {"id": "WB-2",     "status": "nominal", "monitored": False, "machine": "Wet Bench Clean",   "bay": "BAY 3"},
 ]
-CHAMBER_MACHINE = {"CHA": "Multi-Chamber Etch System", "CHB": "PECVD Deposition Cluster"}
-CHAMBER_BAY     = {"CHA": "BAY 2 · ETCH",              "CHB": "BAY 3 · DEPOSITION"}
+# Both CHA and CHB are LAM 9600 TCP metal-etch chambers (same METAL_ETCH_A_V3
+# recipe, same etch sensors, mapped to LAM_9600_TCP in cost_model.py).
+CHAMBER_MACHINE = {"CHA": "Multi-Chamber Etch System", "CHB": "LAM 9600 TCP Etcher"}
+CHAMBER_BAY     = {"CHA": "BAY 2 · ETCH",              "CHB": "BAY 3 · ETCH"}
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -408,11 +406,36 @@ def build_payload(anomaly_log, trend_log, machine_df, summary_df, thresholds=Non
         pct = _progress(t)
         tone = "red" if pct >= 80 else "yellow" if pct >= 50 else "green"
         rising = t["trend_direction"] == "increasing"
+        # A trend is still IN range, so report distance to the boundary it is
+        # approaching (not _dev_string, which assumes an out-of-range value).
+        _dist = (t["threshold_max"] - t["current_value"]) if rising \
+            else (t["current_value"] - t["threshold_min"])
+        _dev = f"{_dist:.2f} from {'upper' if rising else 'lower'} limit"
         trends.append({
             "label": f"{t['chamber']} · {LABELS.get(t['sensor'], t['sensor'])}",
             "pct": pct, "tone": tone,
             "status": f"{'rising' if rising else 'falling'} — monitoring",
             "data": t.get("values_seen", [])[-20:] or [pct - 4, pct - 2, pct],
+            # ── Detail fields (rendered when the trend item is clicked) ──────
+            "id":             t["_id"],
+            "chamber":        t["chamber"],
+            "sensor":         t["sensor"],
+            "pc":             LABELS.get(t["sensor"], t["sensor"]),
+            "unit":           UNITS.get(t["sensor"], ""),
+            "wafer_id":       t["wafer_id"],
+            "lot":            str(w2l.get(t["wafer_id"], "—")),
+            "step":           t["step"],
+            "time":           t["timestamp"],
+            "current_value":  t["current_value"],
+            "threshold_min":  t["threshold_min"],
+            "threshold_max":  t["threshold_max"],
+            "deviation":      _dev,
+            "direction":      t["trend_direction"],
+            "rate_per_step":  t["rate_per_step"],
+            "r_squared":      t["r_squared"],
+            "steps_to_breach": t["steps_to_breach"],
+            "time_to_breach": t["time_to_breach"],
+            "explanation":    t.get("explanation", ""),
         })
 
     # ── per-chamber rollup ───────────────────────────────────────────────────
@@ -422,16 +445,24 @@ def build_payload(anomaly_log, trend_log, machine_df, summary_df, thresholds=Non
         ch_trends = [t for t in trend_log   if t["chamber"] == ch]
         status = "fault" if ch_anoms else "watch" if ch_trends else "nominal"
 
-        # Meta comes from the CURRENT wafer chosen BY TIME (latest run_start),
-        # not by wafer_id — wafer_id order ≠ time order across production days.
+        # Meta = the CURRENT wafer for this chamber. When the chamber is in an
+        # error state, the "current" wafer is the one behind its MOST RECENT
+        # anomaly, so the machine detail (lot, recipe, OEE, work order, live
+        # sensor values) agrees with the incoming-error tile the operator sees.
+        # With no active error, fall back to the latest wafer BY TIME (latest
+        # run_start — wafer_id order ≠ time order across production days).
         srows = srows.copy()
         total = len(srows)
         fails = int((srows["pass_fail"] == "FAIL").sum()) if total else 0
-        if total:
+        meta = None
+        if ch_anoms:
+            latest_anom = max(ch_anoms, key=lambda a: _secs(a["timestamp"]))
+            anchor = srows[srows["wafer_id"] == latest_anom["wafer_id"]]
+            if len(anchor):
+                meta = anchor.iloc[0]                       # wafer of the most recent error
+        if meta is None and total:
             srows["_tod"] = srows["run_start"].map(lambda r: _secs(_event_time(r)))
-            meta = srows.sort_values("_tod").iloc[-1]      # most recent wafer BY TIME
-        else:
-            meta = None
+            meta = srows.sort_values("_tod").iloc[-1]       # most recent wafer BY TIME
 
         # Last reading of that current-by-time wafer — used only for sensors that
         # have NOT tripped an alarm (so they show a live in-range value).
@@ -469,12 +500,11 @@ def build_payload(anomaly_log, trend_log, machine_df, summary_df, thresholds=Non
                 sensors.append({"label": label, "value": "—", "unit": unit, "status": "ok"})
 
         modules = [{"ok": "green", "watch": "yellow", "fault": "red"}[s["status"]] for s in sensors]
-        # If the only breached sensor isn't one of the 4 displayed (e.g. cl2_flow),
-        # still flag a module red so a faulted chamber reads as faulted.
-        if status == "fault" and "red" not in modules:
-            anom_sensors = {a["sensor"] for a in ch_anoms}
-            idx = next((i for i, (k, *_ ) in enumerate(SENSORS) if k in anom_sensors), 0)
-            modules[idx] = "red"
+        # The chamber diagram renders only the first 4 modules. If the breached
+        # sensor sits outside that drawn set (e.g. cl2_flow, the 5th), force a
+        # drawn module red so a faulted chamber still reads as faulted.
+        if status == "fault" and "red" not in modules[:4]:
+            modules[0] = "red"
 
         findings = []
         for a in ch_anoms[:4]:
