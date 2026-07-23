@@ -48,10 +48,17 @@ SHIFT_CONFIG_PATH = _ROOT / "shift_config.json"
 
 
 def load_shift_config():
-    """Return the onboarding config dict ({thresholds, role, ...}) or {}."""
+    """Return the onboarding config dict ({thresholds, role, ...}) or {}.
+
+    Malformed/unexpected shapes (not a JSON object) fall back to {} exactly
+    like a missing/unreadable file, so callers never have to guard against a
+    non-dict result from a hand-edited or corrupted shift_config.json.
+    """
     try:
         if SHIFT_CONFIG_PATH.exists():
-            return json.loads(SHIFT_CONFIG_PATH.read_text())
+            cfg = json.loads(SHIFT_CONFIG_PATH.read_text())
+            if isinstance(cfg, dict):
+                return cfg
     except (json.JSONDecodeError, OSError):
         pass
     return {}
@@ -61,8 +68,11 @@ def resolve_thresholds(base=None):
     """THRESHOLDS with the operator's onboarding overrides applied (per sensor,
     only when min < max). Returns a fresh dict; never mutates the base."""
     thresholds = {k: dict(v) for k, v in (base or THRESHOLDS).items()}
-    for sensor, rng in (load_shift_config().get("thresholds") or {}).items():
-        if sensor not in thresholds:
+    cfg_thresholds = load_shift_config().get("thresholds")
+    if not isinstance(cfg_thresholds, dict):
+        cfg_thresholds = {}
+    for sensor, rng in cfg_thresholds.items():
+        if sensor not in thresholds or not isinstance(rng, dict):
             continue
         try:
             lo, hi = float(rng["min"]), float(rng["max"])

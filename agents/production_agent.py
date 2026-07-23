@@ -9,19 +9,15 @@
 # - **Trend detection** — flags sensors on a sustained trajectory toward a breach
 # 
 
-# Install dependencies
+# Path setup
+# Dependencies (openai, pandas, numpy, python-dotenv, ...) are installed via
+# `pip install -r requirements.txt` as part of environment setup, not here.
 
-import sys, subprocess
+import sys
 from pathlib import Path as _Path
 _ROOT = _Path(__file__).parent.parent
 if str(_Path(__file__).parent) not in sys.path:
     sys.path.insert(0, str(_Path(__file__).parent))
-
-# install all required packages including python-dotenv
-subprocess.run([sys.executable, "-m", "pip", "install", 
-                "openai", "pandas", "numpy", "python-dotenv", "--quiet"], 
-               check=True)
-print("Dependencies ready.")
 
 import os
 import json

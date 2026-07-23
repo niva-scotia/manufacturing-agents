@@ -551,6 +551,12 @@ let state = DEMO;
 const STATUS_COLOR = { fault: 'var(--red)', nominal: 'var(--green)', watch: 'var(--yellow)', idle: 'var(--muted)' };
 const STATUS_TEXT  = { fault: 'FAULT', nominal: 'NOMINAL', watch: 'WATCH', idle: 'IDLE' };
 
+// For values used as class names / attribute tokens (not text): allowlist rather than escape.
+function clsSafe(v, allowed, fallback) { return allowed.includes(v) ? v : fallback; }
+const STATUSES = ['fault', 'nominal', 'watch', 'idle'];
+const FINDING_TYPES = ['anomaly', 'quality', 'trend'];
+const TONES = ['red', 'yellow', 'green'];
+
 /* ───────────── SVG: big chamber diagram ───────────── */
 function moduleColor(tone) {
   if (tone === 'green') return '#34d399';
@@ -633,11 +639,11 @@ function renderCritical() {
   el.innerHTML = `
     <span class="crit-dot"></span>
     <span class="crit-label">CRITICAL</span>
-    <span class="crit-id">${c.id}</span>
-    <span class="crit-ch">${c.chamber}</span>
-    <span class="crit-pc">${c.pc}</span>
-    <span class="crit-msg">${c.text}</span>
-    <span class="crit-time">${c.time}</span>`;
+    <span class="crit-id">${esc(c.id)}</span>
+    <span class="crit-ch">${esc(c.chamber)}</span>
+    <span class="crit-pc">${esc(c.pc)}</span>
+    <span class="crit-msg">${esc(c.text)}</span>
+    <span class="crit-time">${esc(c.time)}</span>`;
 }
 
 // ── New-error alert flash ──────────────────────────────────────────────────
@@ -718,19 +724,20 @@ function renderChambers() {
   const order = Object.keys(state.chambers);
   const html = order.map((key, i) => {
     const ch = state.chambers[key];
+    const status = clsSafe(ch.status, STATUSES, 'idle');
     // Flash only while inside this chamber's alert window; afterwards the class
     // drops and the tile shows the plain static .fault style again.
-    const flick = (ch.status === 'fault' && Date.now() < (flickerUntil[key] || 0)) ? ' flicker' : '';
+    const flick = (status === 'fault' && Date.now() < (flickerUntil[key] || 0)) ? ' flicker' : '';
     const card = `
-      <div class="chamber ${ch.status}${flick}" data-ch="${key}">
+      <div class="chamber ${status}${flick}" data-ch="${esc(key)}">
         <div class="ch-head">
-          <div class="ch-name">${ch.name} <span class="dot ${ch.status === 'fault' ? 'red' : ch.status === 'watch' ? 'yellow' : 'green'}"></span></div>
-          <div class="ch-status ${ch.status}">${STATUS_TEXT[ch.status]}</div>
+          <div class="ch-name">${esc(ch.name)} <span class="dot ${status === 'fault' ? 'red' : status === 'watch' ? 'yellow' : 'green'}"></span></div>
+          <div class="ch-status ${status}">${STATUS_TEXT[status]}</div>
         </div>
         <div class="ch-diagram">${bigDiagram(ch)}</div>
         <div class="ch-foot">
-          <div class="ch-machine">${ch.machine}</div>
-          <div class="ch-bay">${ch.bay}</div>
+          <div class="ch-machine">${esc(ch.machine)}</div>
+          <div class="ch-bay">${esc(ch.bay)}</div>
         </div>
       </div>`;
     return i === 0 ? card + `<div class="aisle"><span>SERVICE AISLE</span></div>` : card;
@@ -773,17 +780,18 @@ function renderErrors() {
   const errors = state.errors || [];
   document.getElementById('errorsList').innerHTML = errors.map(e => {
     const meta = errMeta(e);
+    const type = clsSafe(e.type, FINDING_TYPES, 'trend');
     return `
-    <div class="err-card ${e.type}" data-id="${e.id}" data-ch="${e.chamber}">
+    <div class="err-card ${type}" data-id="${esc(e.id)}" data-ch="${esc(e.chamber)}">
       <div class="err-top">
-        <span class="err-ch">${e.chamber}</span>
-        <span class="err-pc">${e.pc}</span>
-        <span class="tag ${e.type}">${e.type === 'anomaly' ? 'Anomaly' : e.type === 'quality' ? 'Quality' : 'Trend'}</span>
-        <span class="err-time">${e.time}</span>
+        <span class="err-ch">${esc(e.chamber)}</span>
+        <span class="err-pc">${esc(e.pc)}</span>
+        <span class="tag ${type}">${type === 'anomaly' ? 'Anomaly' : type === 'quality' ? 'Quality' : 'Trend'}</span>
+        <span class="err-time">${esc(e.time)}</span>
       </div>
-      <div class="err-desc">${e.text}</div>
-      ${meta ? `<div class="err-meta">${meta}</div>` : ''}
-      <div class="err-id">${e.id}</div>
+      <div class="err-desc">${esc(e.text)}</div>
+      ${meta ? `<div class="err-meta">${esc(meta)}</div>` : ''}
+      <div class="err-id">${esc(e.id)}</div>
     </div>`;
   }).join('');
   document.getElementById('err-red').textContent = errors.filter(e => e.type === 'anomaly').length;
@@ -798,16 +806,17 @@ function renderTrends() {
   document.getElementById('trendItems').innerHTML = (state.trends || []).map((t, i) => {
     // Trend watch uses yellow (caution) highlights — a low-progress 'green' tone
     // is shown as yellow here so the strip reads as a watch signal. Red stays red.
-    const tone = t.tone === 'green' ? 'yellow' : t.tone;
+    const rawTone = clsSafe(t.tone, TONES, 'green');
+    const tone = rawTone === 'green' ? 'yellow' : rawTone;
     return `
     <div class="trend-item" data-idx="${i}">
       <div class="trend-top">
-        <span class="trend-name">${t.label}</span>
-        <span class="trend-pct ${tone}">${t.pct}%</span>
+        <span class="trend-name">${esc(t.label)}</span>
+        <span class="trend-pct ${tone}">${esc(t.pct)}%</span>
       </div>
       <div class="trend-spark">
         ${sparkline(t.data, tone, 110, 28)}
-        <span class="trend-status">${t.status}</span>
+        <span class="trend-status">${esc(t.status)}</span>
       </div>
     </div>`;
   }).join('');
@@ -821,21 +830,22 @@ function renderTrends() {
 const tt = document.getElementById('tooltip');
 function showTooltip(key, e) {
   const ch = state.chambers[key];
-  const col = STATUS_COLOR[ch.status];
+  const status = clsSafe(ch.status, STATUSES, 'idle');
+  const col = STATUS_COLOR[status];
   const mini = (ch.sensors || []).slice(0, 3).map(s =>
-    `<div class="kv"><label>${s.label}</label><span>${s.value} ${s.unit}</span></div>`).join('');
+    `<div class="kv"><label>${esc(s.label)}</label><span>${esc(s.value)} ${esc(s.unit)}</span></div>`).join('');
   tt.innerHTML = `
     <div class="tt-head">
-      <span class="tt-name">${ch.name}</span>
+      <span class="tt-name">${esc(ch.name)}</span>
       <span class="dot" style="background:${col};box-shadow:0 0 7px ${col};"></span>
-      <span class="tt-status" style="color:${col};">${STATUS_TEXT[ch.status]}</span>
+      <span class="tt-status" style="color:${col};">${STATUS_TEXT[status]}</span>
     </div>
-    <div class="tt-machine">${ch.machine}</div>
+    <div class="tt-machine">${esc(ch.machine)}</div>
     <div class="tt-grid">
-      <div class="kv"><label>CHAMBER</label><span>${ch.chamber}</span></div>
-      <div class="kv"><label>LOT</label><span>${ch.lot}</span></div>
-      <div class="kv"><label>RECIPE</label><span>${ch.recipe}</span></div>
-      <div class="kv"><label>WAFERS</label><span>${ch.wafers}</span></div>
+      <div class="kv"><label>CHAMBER</label><span>${esc(ch.chamber)}</span></div>
+      <div class="kv"><label>LOT</label><span>${esc(ch.lot)}</span></div>
+      <div class="kv"><label>RECIPE</label><span>${esc(ch.recipe)}</span></div>
+      <div class="kv"><label>WAFERS</label><span>${esc(ch.wafers)}</span></div>
     </div>
     <div class="tt-divider"></div>
     <div class="tt-grid three">${mini}</div>`;
@@ -880,60 +890,62 @@ function openErrorDetail(id) {
   const e = (state.errors || []).find(x => x.id === id);
   if (!e) return;
   const ch = state.chambers[e.chamber];
-  const col = STATUS_COLOR[ch ? ch.status : 'fault'];
-  const label = e.type === 'anomaly' ? 'Anomaly' : e.type === 'quality' ? 'Quality' : 'Trend';
+  const status = clsSafe(ch ? ch.status : 'fault', STATUSES, 'fault');
+  const col = STATUS_COLOR[status];
+  const type = clsSafe(e.type, FINDING_TYPES, 'trend');
+  const label = type === 'anomaly' ? 'Anomaly' : type === 'quality' ? 'Quality' : 'Trend';
   const hasThr = e.threshold_min != null && e.threshold_max != null;
-  const rangeStr = hasThr ? `${e.threshold_min} – ${e.threshold_max}` : '—';
+  const rangeStr = hasThr ? `${esc(e.threshold_min)} – ${esc(e.threshold_max)}` : '—';
   const multi = (e.breach_count || 1) > 1;
   const valLabel = multi ? 'PEAK VALUE' : 'MEASURED VALUE';
-  const stepCell = multi ? `${e.breach_count} · ${e.first_step}–${e.last_step}` : (e.step ?? '—');
+  const stepCell = multi ? `${esc(e.breach_count)} · ${esc(e.first_step)}–${esc(e.last_step)}` : esc(e.step ?? '—');
   const stepsHtml = (e.steps && e.steps.length > 1) ? `
-      <div class="findings-label" style="margin-top:16px;">BREACH READINGS · ${e.steps.length}${e.duration_sec ? ' over ' + e.duration_sec + 's' : ''}</div>
+      <div class="findings-label" style="margin-top:16px;">BREACH READINGS · ${esc(e.steps.length)}${e.duration_sec ? ' over ' + esc(e.duration_sec) + 's' : ''}</div>
       <div class="findings-scroll" style="max-height:200px;overflow:auto;">
         ${e.steps.map(s => `
           <div class="finding">
             <span class="fdot" style="background:var(--red);box-shadow:0 0 6px var(--red);"></span>
-            <div class="finding-top"><span class="finding-pc">step ${s.step}</span></div>
-            <span class="finding-time">${s.time}</span>
-            <div class="finding-desc">${s.value}${e.unit ? ' ' + e.unit : ''}</div>
+            <div class="finding-top"><span class="finding-pc">step ${esc(s.step)}</span></div>
+            <span class="finding-time">${esc(s.time)}</span>
+            <div class="finding-desc">${esc(s.value)}${e.unit ? ' ' + esc(e.unit) : ''}</div>
           </div>`).join('')}
       </div>` : '';
   const expl = e.explanation
-    ? `<div class="findings-label" style="margin-top:16px;">WHY IT MATTERS</div><div class="cost-desc">${e.explanation}</div>`
+    ? `<div class="findings-label" style="margin-top:16px;">WHY IT MATTERS</div><div class="cost-desc">${esc(e.explanation)}</div>`
     : '';
   openModal(`
     <div class="modal-head">
       <span class="dot" style="background:${col};box-shadow:0 0 7px ${col};"></span>
       <span class="modal-title">EVENT DETAIL</span>
-      <span class="modal-sub">${e.id}</span>
+      <span class="modal-sub">${esc(e.id)}</span>
       <button class="modal-x" data-close>✕</button>
     </div>
     <div class="modal-body">
       <div class="md-title">
-        <span class="md-name">${e.pc}</span>
-        <span class="tag ${e.type}">${label}</span>
+        <span class="md-name">${esc(e.pc)}</span>
+        <span class="tag ${type}">${label}</span>
       </div>
-      <div class="md-machine">${e.chamber}${ch ? ' · ' + ch.machine : ''}</div>
+      <div class="md-machine">${esc(e.chamber)}${ch ? ' · ' + esc(ch.machine) : ''}</div>
       <div class="md-meta">
-        <div class="kv"><label>WAFER</label><span>${e.wafer_id ?? '—'}</span></div>
-        <div class="kv"><label>LOT</label><span>${e.lot ?? '—'}</span></div>
-        <div class="kv"><label>CHAMBER</label><span>${e.chamber}</span></div>
+        <div class="kv"><label>WAFER</label><span>${esc(e.wafer_id ?? '—')}</span></div>
+        <div class="kv"><label>LOT</label><span>${esc(e.lot ?? '—')}</span></div>
+        <div class="kv"><label>CHAMBER</label><span>${esc(e.chamber)}</span></div>
         <div class="kv"><label>${multi ? 'BREACH STEPS' : 'STEP'}</label><span>${stepCell}</span></div>
-        <div class="kv"><label>${multi ? 'FIRST BREACH' : 'DETECTED'}</label><span>${e.time}</span></div>
+        <div class="kv"><label>${multi ? 'FIRST BREACH' : 'DETECTED'}</label><span>${esc(e.time)}</span></div>
         <div class="kv"><label>TYPE</label><span>${label}</span></div>
       </div>
       <div class="stat-grid">
-        <div class="stat-box"><label>${valLabel}</label><div class="val">${e.value ?? '—'} <span class="unit">${e.unit || ''}</span></div></div>
-        <div class="stat-box"><label>ALLOWED RANGE</label><div class="val" style="font-size:16px;">${rangeStr} <span class="unit">${hasThr ? (e.unit || '') : ''}</span></div></div>
+        <div class="stat-box"><label>${valLabel}</label><div class="val">${esc(e.value ?? '—')} <span class="unit">${esc(e.unit || '')}</span></div></div>
+        <div class="stat-box"><label>ALLOWED RANGE</label><div class="val" style="font-size:16px;">${rangeStr} <span class="unit">${hasThr ? esc(e.unit || '') : ''}</span></div></div>
       </div>
       <div class="stat-box" style="margin-bottom:14px;">
         <label>${multi ? 'PEAK DEVIATION' : 'DEVIATION'}</label>
-        <div class="val" style="font-size:16px;color:var(--red);">${e.deviation || e.text}</div>
+        <div class="val" style="font-size:16px;color:var(--red);">${esc(e.deviation || e.text)}</div>
       </div>
       ${stepsHtml}
       ${expl}
-      <button class="resolve-btn" data-resolve="${e.id}" style="margin-top:16px;">FIX ERROR</button>
-      <button class="nav-btn" id="evtChamberBtn">VIEW CHAMBER ${e.chamber} →</button>
+      <button class="resolve-btn" data-resolve="${esc(e.id)}" style="margin-top:16px;">FIX ERROR</button>
+      <button class="nav-btn" id="evtChamberBtn">VIEW CHAMBER ${esc(e.chamber)} →</button>
     </div>`, 'detail');
   // Fix THIS specific error, then close — it disappears from the incoming-errors
   // feed. Lets the user resolve any error, not just the chamber's most recent.
@@ -952,17 +964,17 @@ function openTrendDetail(idx) {
   const ch = state.chambers[t.chamber];
   const col = STATUS_COLOR.watch;   // trends are a WATCH state, not yet a fault
   const hasThr = t.threshold_min != null && t.threshold_max != null;
-  const rangeStr = hasThr ? `${t.threshold_min} – ${t.threshold_max}` : '—';
+  const rangeStr = hasThr ? `${esc(t.threshold_min)} – ${esc(t.threshold_max)}` : '—';
   const rising = t.direction ? t.direction === 'increasing' : (t.tone !== 'green');
   const arrow = rising ? '↑' : '↓';
   const rate = (t.rate_per_step != null)
-    ? `${t.rate_per_step > 0 ? '+' : ''}${t.rate_per_step}/step` : '—';
-  const r2 = (t.r_squared != null) ? t.r_squared : '—';
+    ? `${t.rate_per_step > 0 ? '+' : ''}${esc(t.rate_per_step)}/step` : '—';
+  const r2 = (t.r_squared != null) ? esc(t.r_squared) : '—';
   // "Time to breach" is the headline for a trend: it's the actionable lead time.
   const breachHtml = t.time_to_breach ? `
     <div class="stat-box" style="margin-bottom:14px;border-color:rgba(251,191,36,0.4);">
       <label>PROJECTED BREACH</label>
-      <div class="val" style="font-size:18px;color:var(--yellow);">in ${t.time_to_breach}</div>
+      <div class="val" style="font-size:18px;color:var(--yellow);">in ${esc(t.time_to_breach)}</div>
     </div>` : '';
   const expl = t.explanation
     ? `<div class="findings-label" style="margin-top:16px;">WHY IT MATTERS</div><div class="cost-desc">${esc(t.explanation)}</div>`
@@ -971,36 +983,36 @@ function openTrendDetail(idx) {
     <div class="modal-head">
       <span class="dot" style="background:${col};box-shadow:0 0 7px ${col};"></span>
       <span class="modal-title">TREND DETAIL</span>
-      <span class="modal-sub">${t.id || t.label}</span>
+      <span class="modal-sub">${esc(t.id || t.label)}</span>
       <button class="modal-x" data-close>✕</button>
     </div>
     <div class="modal-body">
       <div class="md-title">
-        <span class="md-name">${t.pc || t.label} ${arrow}</span>
+        <span class="md-name">${esc(t.pc || t.label)} ${arrow}</span>
         <span class="tag trend">Trend</span>
       </div>
-      <div class="md-machine">${t.chamber ? t.chamber + (ch ? ' · ' + ch.machine : '') : t.label}</div>
+      <div class="md-machine">${t.chamber ? esc(t.chamber) + (ch ? ' · ' + esc(ch.machine) : '') : esc(t.label)}</div>
       <div class="md-meta">
-        <div class="kv"><label>WAFER</label><span>${t.wafer_id ?? '—'}</span></div>
-        <div class="kv"><label>LOT</label><span>${t.lot ?? '—'}</span></div>
-        <div class="kv"><label>CHAMBER</label><span>${t.chamber ?? '—'}</span></div>
-        <div class="kv"><label>STEP</label><span>${t.step ?? '—'}</span></div>
-        <div class="kv"><label>DETECTED</label><span>${t.time ?? '—'}</span></div>
-        <div class="kv"><label>PROGRESS</label><span>${t.pct}%</span></div>
+        <div class="kv"><label>WAFER</label><span>${esc(t.wafer_id ?? '—')}</span></div>
+        <div class="kv"><label>LOT</label><span>${esc(t.lot ?? '—')}</span></div>
+        <div class="kv"><label>CHAMBER</label><span>${esc(t.chamber ?? '—')}</span></div>
+        <div class="kv"><label>STEP</label><span>${esc(t.step ?? '—')}</span></div>
+        <div class="kv"><label>DETECTED</label><span>${esc(t.time ?? '—')}</span></div>
+        <div class="kv"><label>PROGRESS</label><span>${esc(t.pct)}%</span></div>
       </div>
       <div class="stat-grid">
-        <div class="stat-box"><label>CURRENT VALUE</label><div class="val">${t.current_value ?? '—'} <span class="unit">${t.unit || ''}</span></div></div>
-        <div class="stat-box"><label>ALLOWED RANGE</label><div class="val" style="font-size:16px;">${rangeStr} <span class="unit">${hasThr ? (t.unit || '') : ''}</span></div></div>
+        <div class="stat-box"><label>CURRENT VALUE</label><div class="val">${esc(t.current_value ?? '—')} <span class="unit">${esc(t.unit || '')}</span></div></div>
+        <div class="stat-box"><label>ALLOWED RANGE</label><div class="val" style="font-size:16px;">${rangeStr} <span class="unit">${hasThr ? esc(t.unit || '') : ''}</span></div></div>
         <div class="stat-box"><label>RATE OF CHANGE</label><div class="val" style="font-size:16px;">${rate}</div></div>
         <div class="stat-box"><label>LINEARITY (R²)</label><div class="val" style="font-size:16px;">${r2}</div></div>
       </div>
       ${breachHtml}
       <div class="stat-box" style="margin-bottom:14px;">
         <label>DEVIATION</label>
-        <div class="val" style="font-size:16px;color:var(--yellow);">${t.deviation || t.status || ''}</div>
+        <div class="val" style="font-size:16px;color:var(--yellow);">${esc(t.deviation || t.status || '')}</div>
       </div>
       ${expl}
-      ${t.chamber && state.chambers[t.chamber] ? `<button class="nav-btn" id="trendChamberBtn" style="margin-top:16px;">VIEW CHAMBER ${t.chamber} →</button>` : ''}
+      ${t.chamber && state.chambers[t.chamber] ? `<button class="nav-btn" id="trendChamberBtn" style="margin-top:16px;">VIEW CHAMBER ${esc(t.chamber)} →</button>` : ''}
     </div>`, 'detail');
   const cbtn = document.getElementById('trendChamberBtn');
   if (cbtn) cbtn.addEventListener('click', () => { if (state.chambers[t.chamber]) openDetail(t.chamber); });
@@ -1009,23 +1021,25 @@ function openTrendDetail(idx) {
 function openDetail(key) {
   const ch = state.chambers[key];
   if (!ch) return;
-  const col = STATUS_COLOR[ch.status];
+  const status = clsSafe(ch.status, STATUSES, 'idle');
+  const col = STATUS_COLOR[status];
   const statBoxes = (ch.sensors || []).map(s =>
-    `<div class="stat-box" data-sensor="${s.label}"><label>${s.label}</label><div class="val">${s.value} <span class="unit">${s.unit}</span></div></div>`).join('');
+    `<div class="stat-box" data-sensor="${esc(s.label)}"><label>${esc(s.label)}</label><div class="val">${esc(s.value)} <span class="unit">${esc(s.unit)}</span></div></div>`).join('');
   const noFindings = !ch.findings || ch.findings.length === 0;
-  const findings = ch.findings.map(f => {
-    const fc = f.type === 'anomaly' ? 'var(--teal)' : f.type === 'quality' ? 'var(--green)' : 'var(--yellow)';
-    const label = f.type === 'anomaly' ? 'Anomaly' : f.type === 'quality' ? 'Quality' : 'Trend';
+  const findings = (ch.findings || []).map(f => {
+    const ftype = clsSafe(f.type, FINDING_TYPES, 'trend');
+    const fc = ftype === 'anomaly' ? 'var(--teal)' : ftype === 'quality' ? 'var(--green)' : 'var(--yellow)';
+    const label = ftype === 'anomaly' ? 'Anomaly' : ftype === 'quality' ? 'Quality' : 'Trend';
     return `
       <div class="finding">
         <span class="fdot" style="background:${fc};box-shadow:0 0 6px ${fc};"></span>
         <div class="finding-top">
-          <span class="tag ${f.type}">${label}</span>
-          <span class="finding-pc">${f.pc}</span>
+          <span class="tag ${ftype}">${label}</span>
+          <span class="finding-pc">${esc(f.pc)}</span>
         </div>
-        <span class="finding-time">${f.time}</span>
-        <div class="finding-desc">${f.text}</div>
-        <div class="finding-id">${f.id}</div>
+        <span class="finding-time">${esc(f.time)}</span>
+        <div class="finding-desc">${esc(f.text)}</div>
+        <div class="finding-id">${esc(f.id)}</div>
       </div>`;
   }).join('');
   // Cost of Continued Run + "How to fix" are only meaningful when the chamber is
@@ -1033,18 +1047,18 @@ function openDetail(key) {
   // fix, so both are hidden. Cost is the REAL Sustainability Agent output
   // (ch.sustainability); costFallback() only covers a faulted chamber with no
   // live estimate yet (e.g. the no-LLM replay).
-  const showResolution = ch.status !== 'nominal';
+  const showResolution = status !== 'nominal';
   const cost = ch.sustainability || costFallback(ch);
   const costSub = (cost.estimable && cost.remaining_wafers)
-    ? `<div class="cost-sub">${cost.remaining_wafers} wafer${cost.remaining_wafers === 1 ? '' : 's'} at risk · est. $${Number(cost.low).toLocaleString()}–$${Number(cost.high).toLocaleString()}</div>`
+    ? `<div class="cost-sub">${esc(cost.remaining_wafers)} wafer${cost.remaining_wafers === 1 ? '' : 's'} at risk · est. $${esc(Number(cost.low).toLocaleString())}–$${esc(Number(cost.high).toLocaleString())}</div>`
     : '';
   const costHtml = showResolution ? `
     <div class="cost-panel ${cost.level === 'nominal' ? 'nominal' : ''}">
       <div class="cost-head">
         <span class="cost-title"><span class="cost-ico">$</span> COST OF CONTINUED RUN</span>
-        <span class="cost-badge">${cost.badge}</span>
+        <span class="cost-badge">${esc(cost.badge)}</span>
       </div>
-      <div class="cost-figure" data-md="costFigure">${cost.figure} <span class="cost-per">${cost.per}</span></div>
+      <div class="cost-figure" data-md="costFigure">${esc(cost.figure)} <span class="cost-per">${esc(cost.per)}</span></div>
       ${costSub}
       <div class="cost-desc">${esc(cost.desc)}</div>
     </div>` : '';
@@ -1058,13 +1072,13 @@ function openDetail(key) {
     <div class="findings-label">ACTIVE ERROR</div>
     <div class="stat-box" style="margin-bottom:12px;border-left:3px solid var(--red);">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
-        <span data-md="aePc" style="font-family:var(--mono);font-weight:700;color:var(--text);letter-spacing:0.5px;">${curErr.pc}</span>
-        <span class="err-id" data-md="aeId">${curErr.id}</span>
+        <span data-md="aePc" style="font-family:var(--mono);font-weight:700;color:var(--text);letter-spacing:0.5px;">${esc(curErr.pc)}</span>
+        <span class="err-id" data-md="aeId">${esc(curErr.id)}</span>
       </div>
       <div data-md="aeText" style="font-size:13px;color:var(--text2);margin-top:6px;line-height:1.4;">${esc(curErr.text)}</div>
-      <div class="err-meta" data-md="aeMeta" style="margin-top:6px;">${errMeta(curErr) || ''}</div>
+      <div class="err-meta" data-md="aeMeta" style="margin-top:6px;">${esc(errMeta(curErr) || '')}</div>
     </div>
-    <button class="resolve-btn" data-resolve="${curErr.id}">FIX ERROR</button>` : '';
+    <button class="resolve-btn" data-resolve="${esc(curErr.id)}">FIX ERROR</button>` : '';
   openModal(`
     <div class="modal-head">
       <span class="dot" style="background:${col};box-shadow:0 0 7px ${col};"></span>
@@ -1073,17 +1087,17 @@ function openDetail(key) {
     </div>
     <div class="modal-body">
       <div class="md-title">
-        <span class="md-name">${ch.name}</span>
-        <span class="badge ${ch.status}" data-md="badge">${STATUS_TEXT[ch.status]}</span>
+        <span class="md-name">${esc(ch.name)}</span>
+        <span class="badge ${status}" data-md="badge">${STATUS_TEXT[status]}</span>
       </div>
-      <div class="md-machine">${ch.machine}</div>
+      <div class="md-machine">${esc(ch.machine)}</div>
       <div class="md-meta">
-        <div class="kv"><label>CHAMBER</label><span>${ch.chamber}</span></div>
-        <div class="kv"><label>LOT</label><span data-md="lot">${ch.lot}</span></div>
-        <div class="kv"><label>WAFERS</label><span data-md="wafers">${ch.wafers}</span></div>
-        <div class="kv"><label>RECIPE</label><span data-md="recipe">${ch.recipe}</span></div>
-        <div class="kv"><label>OEE</label><span data-md="oee">${ch.oee}</span></div>
-        <div class="kv"><label>WORK ORDER</label><span data-md="wo" style="color:${ch.workOrder && ch.workOrder !== 'NONE' ? 'var(--red)' : 'var(--text)'};">${ch.workOrder}</span></div>
+        <div class="kv"><label>CHAMBER</label><span>${esc(ch.chamber)}</span></div>
+        <div class="kv"><label>LOT</label><span data-md="lot">${esc(ch.lot)}</span></div>
+        <div class="kv"><label>WAFERS</label><span data-md="wafers">${esc(ch.wafers)}</span></div>
+        <div class="kv"><label>RECIPE</label><span data-md="recipe">${esc(ch.recipe)}</span></div>
+        <div class="kv"><label>OEE</label><span data-md="oee">${esc(ch.oee)}</span></div>
+        <div class="kv"><label>WORK ORDER</label><span data-md="wo" style="color:${ch.workOrder && ch.workOrder !== 'NONE' ? 'var(--red)' : 'var(--text)'};">${esc(ch.workOrder)}</span></div>
       </div>
       <div class="stat-grid">${statBoxes}</div>
       ${costHtml}
@@ -1127,18 +1141,19 @@ function refreshOpenModal() {
   if (_detailSig(ch, openDetailKey) !== openDetailSig) { openDetail(openDetailKey); return; }
 
   const setMd = (k, v) => { const el = body.querySelector(`[data-md="${k}"]`); if (el) el.textContent = v; };
+  const status = clsSafe(ch.status, STATUSES, 'idle');
   const badge = body.querySelector('[data-md="badge"]');
-  if (badge) { badge.textContent = STATUS_TEXT[ch.status]; badge.className = `badge ${ch.status}`; }
+  if (badge) { badge.textContent = STATUS_TEXT[status]; badge.className = `badge ${status}`; }
   setMd('lot', ch.lot); setMd('wafers', ch.wafers); setMd('recipe', ch.recipe);
   setMd('oee', ch.oee); setMd('wo', ch.workOrder);
   // Sensor readings — the core live values.
   body.querySelectorAll('.stat-box[data-sensor]').forEach(box => {
     const s = (ch.sensors || []).find(x => x.label === box.dataset.sensor);
     const v = box.querySelector('.val');
-    if (s && v) v.innerHTML = `${s.value} <span class="unit">${s.unit}</span>`;
+    if (s && v) v.innerHTML = `${esc(s.value)} <span class="unit">${esc(s.unit)}</span>`;
   });
   const cf = body.querySelector('[data-md="costFigure"]');
-  if (cf) { const cost = ch.sustainability || costFallback(ch); cf.innerHTML = `${cost.figure} <span class="cost-per">${cost.per}</span>`; }
+  if (cf) { const cost = ch.sustainability || costFallback(ch); cf.innerHTML = `${esc(cost.figure)} <span class="cost-per">${esc(cost.per)}</span>`; }
   // ACTIVE ERROR — keep it pointed at the chamber's current most-recent error.
   const curErr = latestChamberError(openDetailKey);
   if (curErr) {
@@ -1241,18 +1256,19 @@ function setPipelineIdle() {
 
 function openPlantView() {
   const cards = (state.tools || []).map(t => {
-    const cls = `tool ${t.status}${t.monitored ? ' monitored' : ''}`;
-    const col = STATUS_COLOR[t.status];
+    const status = clsSafe(t.status, STATUSES, 'idle');
+    const cls = `tool ${status}${t.monitored ? ' monitored' : ''}`;
+    const col = STATUS_COLOR[status];
     return `
-      <div class="${cls}" ${t.monitored ? `data-ch="${t.id}"` : ''}>
+      <div class="${cls}" ${t.monitored ? `data-ch="${esc(t.id)}"` : ''}>
         <div class="tool-head">
-          <div class="tool-name">${t.id} <span class="dot" style="background:${col};box-shadow:0 0 7px ${col};"></span></div>
-          <div class="tool-status ${t.status}">${STATUS_TEXT[t.status]}</div>
+          <div class="tool-name">${esc(t.id)} <span class="dot" style="background:${col};box-shadow:0 0 7px ${col};"></span></div>
+          <div class="tool-status ${status}">${STATUS_TEXT[status]}</div>
         </div>
-        <div class="tool-icon">${toolIcon(t.status)}</div>
+        <div class="tool-icon">${toolIcon(status)}</div>
         <div class="tool-foot">
-          <span class="tool-machine">${t.machine}</span>
-          <span class="tool-bay">${t.bay}</span>
+          <span class="tool-machine">${esc(t.machine)}</span>
+          <span class="tool-bay">${esc(t.bay)}</span>
         </div>
       </div>`;
   }).join('');
@@ -1271,7 +1287,7 @@ function openPlantView() {
         ${cards}
       </div>
       <div class="pv-foot">
-        <span>${faults.length} monitored tool${faults.length === 1 ? '' : 's'} in fault — ${faults.join(', ') || 'none'}</span>
+        <span>${faults.length} monitored tool${faults.length === 1 ? '' : 's'} in fault — ${esc(faults.join(', ')) || 'none'}</span>
         <span>Click a monitored tool (CHA / CHB) to open its detail</span>
       </div>
     </div>`, 'plant');

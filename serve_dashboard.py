@@ -43,7 +43,11 @@ SIM_SCRIPT  = REPO_ROOT / "agents" / "simulate_realtime.py"
 LIVE_SCRIPT = REPO_ROOT / "agents" / "run_live_pipeline.py"   # LIVE_AGENTS=1 → real 6-agent chain
 SHIFT_CONFIG = REPO_ROOT / "shift_config.json"              # written by the pre-shift onboarding screen
 PORT        = int(os.environ.get("PORT", "8777"))
-HOST        = "127.0.0.1"                                    # localhost only — not the LAN
+# Localhost-only for local dev (nothing on the LAN can reach it). Azure App
+# Service sets WEBSITE_SITE_NAME, and its front-end proxy can only reach a
+# process listening on 0.0.0.0 — so bind there automatically when running on
+# App Service. HOST always wins if set explicitly, for any other platform.
+HOST        = os.environ.get("HOST") or ("0.0.0.0" if os.environ.get("WEBSITE_SITE_NAME") else "127.0.0.1")
 AUTO_REPLAY = os.environ.get("AUTO_REPLAY", "1") != "0"     # allow the dashboard to start agents
 
 # ── Managed replay/agent process ──────────────────────────────────────────────
